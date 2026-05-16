@@ -1,34 +1,5 @@
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
--- PlayerDataService.lua
--- Минимальная заглушка сервиса данных игрока.
--- В будущем здесь появится загрузка и сохранение прогресса через DataStore.
-
-local PlayerDataService = {}
-
-local DEFAULT_DATA = {
-	Coins = 0,
-	HouseLevel = 0,
-	HasPlot = false,
-	ActiveQuestId = nil,
-}
-
-function PlayerDataService.Init()
-	print("[PlayerDataService] Инициализация заглушки")
-end
-
-function PlayerDataService.GetDefaultData()
-	-- Возвращаем копию, чтобы другие сервисы случайно не меняли шаблон.
-	return table.clone(DEFAULT_DATA)
-=======
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
 -- PlayerDataService
--- Хранит простые профили игроков в памяти сервера.
--- DataStore пока не используется: данные живут только до перезапуска сервера.
+-- Stores simple in-memory player profiles for the current server session.
 
 local PlayerDataService = {}
 
@@ -51,14 +22,14 @@ function PlayerDataService.CreateProfile(player)
 	local userId = player.UserId
 
 	if profiles[userId] then
-		print(string.format("[PlayerDataService] Профиль игрока %s уже загружен.", player.Name))
+		print(string.format("[PlayerDataService] Profile for %s is already loaded.", player.Name))
 		return profiles[userId]
 	end
 
 	local profile = createDefaultProfile(player)
 	profiles[userId] = profile
 
-	print(string.format("[PlayerDataService] Создан стартовый профиль для игрока %s (UserId: %d).", player.Name, userId))
+	print(string.format("[PlayerDataService] Created starter profile for %s (UserId: %d).", player.Name, userId))
 
 	return profile
 end
@@ -72,17 +43,10 @@ function PlayerDataService.RemoveProfile(player)
 
 	if profiles[userId] then
 		profiles[userId] = nil
-		print(string.format("[PlayerDataService] Профиль игрока %s удалён из памяти.", player.Name))
+		print(string.format("[PlayerDataService] Removed profile for %s from memory.", player.Name))
 	else
-		print(string.format("[PlayerDataService] Нет профиля для удаления у игрока %s.", player.Name))
+		print(string.format("[PlayerDataService] No profile to remove for %s.", player.Name))
 	end
-<<<<<<< ours
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
 end
 
 return PlayerDataService

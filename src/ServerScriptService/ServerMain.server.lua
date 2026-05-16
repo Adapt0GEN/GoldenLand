@@ -1,32 +1,5 @@
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
--- ServerMain.server.lua
--- Точка входа серверной логики проекта «Златоземье: Своя Земля».
--- Пока файл только безопасно подключает базовые сервисы-заглушки.
-
-local ServerScriptService = game:GetService("ServerScriptService")
-
-local Services = ServerScriptService:WaitForChild("Services")
-
-local PlayerDataService = require(Services:WaitForChild("PlayerDataService"))
-local QuestService = require(Services:WaitForChild("QuestService"))
-local PlotService = require(Services:WaitForChild("PlotService"))
-local CurrencyService = require(Services:WaitForChild("CurrencyService"))
-
-PlayerDataService.Init()
-QuestService.Init()
-PlotService.Init()
-CurrencyService.Init()
-
-print("[GoldenLand] Серверное ядро MVP 0.1 инициализировано")
-=======
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
 -- ServerMain
--- Первый технический прототип сервисного ядра проекта "Златоземье: Своя Земля".
+-- Entry point for the first technical prototype of the GoldenLand service core.
 
 local Players = game:GetService("Players")
 
@@ -34,7 +7,6 @@ local Services = script.Parent.Services
 local PlayerDataService = require(Services.PlayerDataService)
 local QuestService = require(Services.QuestService)
 local PlotService = require(Services.PlotService)
--- CurrencyService подключён здесь явно, чтобы сервисное ядро сразу загружало все базовые сервисы.
 local CurrencyService = require(Services.CurrencyService)
 
 local function formatCompletedQuests(completedQuests)
@@ -47,7 +19,7 @@ local function formatCompletedQuests(completedQuests)
 	end
 
 	if #questIds == 0 then
-		return "нет"
+		return "none"
 	end
 
 	return table.concat(questIds, ", ")
@@ -57,11 +29,11 @@ local function printProfile(player)
 	local profile = PlayerDataService.GetProfile(player)
 
 	if not profile then
-		warn(string.format("[ServerMain] Невозможно вывести профиль игрока %s: профиль не найден.", player.Name))
+		warn(string.format("[ServerMain] Cannot print profile for %s: profile was not found.", player.Name))
 		return
 	end
 
-	print(string.format("[ServerMain] Итоговый профиль игрока %s:", player.Name))
+	print(string.format("[ServerMain] Final profile for %s:", player.Name))
 	print(string.format("  UserId: %d", profile.UserId))
 	print(string.format("  Gold: %d", profile.Gold))
 	print(string.format("  Wood: %d", profile.Wood))
@@ -73,53 +45,42 @@ local function printProfile(player)
 end
 
 local function runTestSequence(player)
-	print(string.format("[ServerMain] Запускаем тестовую последовательность для игрока %s.", player.Name))
+	print(string.format("[ServerMain] Running test sequence for %s.", player.Name))
 
 	QuestService.StartQuest(player, "first_steps")
 
 	task.delay(3, function()
-		-- Игрок мог выйти за эти 3 секунды, поэтому проверяем профиль перед продолжением теста.
 		if not PlayerDataService.GetProfile(player) then
-			print(string.format("[ServerMain] Игрок %s вышел до завершения тестовой последовательности.", player.Name))
+			print(string.format("[ServerMain] %s left before the test sequence finished.", player.Name))
 			return
 		end
 
 		QuestService.CompleteQuest(player, "first_steps")
 		PlotService.UnlockPlot(player)
 		PlotService.UpgradeHouse(player)
+		CurrencyService.AddStone(player, 3)
 		printProfile(player)
 	end)
 end
 
 local function onPlayerAdded(player)
-	print(string.format("[ServerMain] Игрок %s зашёл на сервер. Загружаем данные...", player.Name))
+	print(string.format("[ServerMain] %s joined. Loading player data...", player.Name))
 	PlayerDataService.CreateProfile(player)
-	print(string.format("[ServerMain] Данные игрока %s готовы к работе.", player.Name))
+	print(string.format("[ServerMain] Data for %s is ready.", player.Name))
 
-	-- Переменная используется для явной загрузки CurrencyService в прототипе сервисного ядра.
-	if CurrencyService then
-		runTestSequence(player)
-	end
+	runTestSequence(player)
 end
 
 local function onPlayerRemoving(player)
-	print(string.format("[ServerMain] Игрок %s выходит с сервера. Очищаем данные из памяти...", player.Name))
+	print(string.format("[ServerMain] %s is leaving. Clearing in-memory data...", player.Name))
 	PlayerDataService.RemoveProfile(player)
 end
 
 Players.PlayerAdded:Connect(onPlayerAdded)
 Players.PlayerRemoving:Connect(onPlayerRemoving)
 
--- Поддержка игроков, которые уже были на сервере при запуске скрипта в Studio.
 for _, player in Players:GetPlayers() do
 	onPlayerAdded(player)
 end
 
-print("[ServerMain] Сервисное ядро Златоземья запущено.")
-<<<<<<< ours
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
+print("[ServerMain] GoldenLand service core started.")
