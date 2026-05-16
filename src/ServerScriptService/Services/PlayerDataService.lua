@@ -2,12 +2,33 @@
 -- Загружает, хранит и сохраняет простые профили игроков.
 
 local DataStoreService = game:GetService("DataStoreService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PlayerDataService = {}
 
 local profiles = {}
 local PROFILE_STORE_NAME = "GoldenLandPlayerProfiles_v1"
 local profileStore = nil
+
+local function getRemoteEvent(eventName)
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+
+	if not remotes then
+		remotes = Instance.new("Folder")
+		remotes.Name = "Remotes"
+		remotes.Parent = ReplicatedStorage
+	end
+
+	local remoteEvent = remotes:FindFirstChild(eventName)
+
+	if not remoteEvent then
+		remoteEvent = Instance.new("RemoteEvent")
+		remoteEvent.Name = eventName
+		remoteEvent.Parent = remotes
+	end
+
+	return remoteEvent
+end
 
 local function createDefaultProfile(player)
 	return {
@@ -160,11 +181,44 @@ function PlayerDataService.CreateProfile(player)
 
 	profiles[userId] = profile
 
+	task.defer(function()
+		if profiles[userId] and PlayerDataService.SendProfileUpdate then
+			PlayerDataService.SendProfileUpdate(player)
+		end
+	end)
+
 	return profile
 end
 
 function PlayerDataService.GetProfile(player)
 	return profiles[player.UserId]
+end
+
+function PlayerDataService.GetPublicProfile(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return nil
+	end
+
+	return {
+		Gold = profile.Gold,
+		Wood = profile.Wood,
+		Stone = profile.Stone,
+		HouseLevel = profile.HouseLevel,
+		PlotUnlocked = profile.PlotUnlocked,
+	}
+end
+
+function PlayerDataService.SendProfileUpdate(player)
+	local publicProfile = PlayerDataService.GetPublicProfile(player)
+
+	if not publicProfile then
+		return false
+	end
+
+	getRemoteEvent("PlayerStatsUpdateEvent"):FireClient(player, publicProfile)
+	return true
 end
 
 function PlayerDataService.SaveProfile(player)
@@ -193,6 +247,7 @@ function PlayerDataService.SaveProfile(player)
 	end
 
 	print(string.format("[PlayerDataService] Saved profile for %s.", player.Name))
+	PlayerDataService.SendProfileUpdate(player)
 	return true
 end
 

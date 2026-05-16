@@ -1,5 +1,5 @@
 -- CurrencyService
--- Mutates resources in the player's in-memory profile.
+-- Меняет ресурсы в профиле игрока и обновляет UI.
 
 local PlayerDataService = require(script.Parent.PlayerDataService)
 
@@ -22,6 +22,10 @@ local function addResource(player, resourceName, amount)
 		player.Name,
 		profile[resourceName]
 	))
+
+	if PlayerDataService.SendProfileUpdate then
+		PlayerDataService.SendProfileUpdate(player)
+	end
 
 	return profile[resourceName]
 end

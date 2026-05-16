@@ -1,6 +1,7 @@
 -- PlotService
 -- Тестовый участок, визуальное развитие дома и платное улучшение.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local PlayerDataService = require(script.Parent.PlayerDataService)
 
@@ -22,6 +23,30 @@ local HOUSE_UPGRADE_COSTS = {
 		Stone = 6,
 	},
 }
+
+local function getRemoteEvent(eventName)
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+
+	if not remotes then
+		remotes = Instance.new("Folder")
+		remotes.Name = "Remotes"
+		remotes.Parent = ReplicatedStorage
+	end
+
+	local remoteEvent = remotes:FindFirstChild(eventName)
+
+	if not remoteEvent then
+		remoteEvent = Instance.new("RemoteEvent")
+		remoteEvent.Name = eventName
+		remoteEvent.Parent = remotes
+	end
+
+	return remoteEvent
+end
+
+local function sendPlayerMessage(player, message)
+	getRemoteEvent("PlayerMessageEvent"):FireClient(player, message)
+end
 
 local function getPlotName(player)
 	return string.format("Plot_%d", player.UserId)
@@ -385,6 +410,10 @@ function PlotService.UnlockPlot(player)
 	profile.PlotUnlocked = true
 	print(string.format("[PlotService] %s unlocked a plot.", player.Name))
 
+	if PlayerDataService.SendProfileUpdate then
+		PlayerDataService.SendProfileUpdate(player)
+	end
+
 	return true
 end
 
@@ -473,12 +502,19 @@ function PlotService.TryUpgradeHouse(player)
 	local canUpgrade, reason, cost = PlotService.CanUpgradeHouse(player)
 
 	if not canUpgrade then
+		local playerMessage = "Дом нельзя улучшить"
+
 		if reason == "дом уже улучшен до максимума" then
+			playerMessage = "Дом уже улучшен до максимума"
 			print(string.format("[PlotService] %s tried to upgrade house, but %s.", player.Name, reason))
+		elseif string.find(reason, "не хватает ресурсов", 1, true) then
+			playerMessage = "Недостаточно ресурсов для улучшения дома"
+			warn(string.format("[PlotService] %s cannot upgrade house: %s.", player.Name, reason))
 		else
 			warn(string.format("[PlotService] %s cannot upgrade house: %s.", player.Name, reason))
 		end
 
+		sendPlayerMessage(player, playerMessage)
 		return false
 	end
 
@@ -491,9 +527,15 @@ function PlotService.TryUpgradeHouse(player)
 	profile.HouseLevel += 1
 	updateHouseVisual(player, profile.HouseLevel)
 
+	if PlayerDataService.SendProfileUpdate then
+		PlayerDataService.SendProfileUpdate(player)
+	end
+
 	if PlayerDataService.SaveProfile then
 		PlayerDataService.SaveProfile(player)
 	end
+
+	sendPlayerMessage(player, string.format("Дом улучшен до уровня %d", profile.HouseLevel))
 
 	print(string.format(
 		"[PlotService] %s upgraded house from level %d to %d. Cost: %s.",

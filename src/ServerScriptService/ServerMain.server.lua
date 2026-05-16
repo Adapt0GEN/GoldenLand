@@ -4,7 +4,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local function ensureQuestUpdateEvent()
+local function ensureRemoteEvent(eventName)
 	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 
 	if not remotes then
@@ -13,18 +13,20 @@ local function ensureQuestUpdateEvent()
 		remotes.Parent = ReplicatedStorage
 	end
 
-	local questUpdateEvent = remotes:FindFirstChild("QuestUpdateEvent")
+	local remoteEvent = remotes:FindFirstChild(eventName)
 
-	if not questUpdateEvent then
-		questUpdateEvent = Instance.new("RemoteEvent")
-		questUpdateEvent.Name = "QuestUpdateEvent"
-		questUpdateEvent.Parent = remotes
+	if not remoteEvent then
+		remoteEvent = Instance.new("RemoteEvent")
+		remoteEvent.Name = eventName
+		remoteEvent.Parent = remotes
 	end
 
-	return questUpdateEvent
+	return remoteEvent
 end
 
-ensureQuestUpdateEvent()
+ensureRemoteEvent("QuestUpdateEvent")
+ensureRemoteEvent("PlayerStatsUpdateEvent")
+ensureRemoteEvent("PlayerMessageEvent")
 
 local Services = script.Parent.Services
 local PlayerDataService = require(Services.PlayerDataService)
@@ -42,6 +44,13 @@ local function onPlayerAdded(player)
 	print(string.format("[ServerMain] %s joined. Loading player data...", player.Name))
 	local profile = PlayerDataService.CreateProfile(player)
 	print(string.format("[ServerMain] Data for %s is ready.", player.Name))
+	PlayerDataService.SendProfileUpdate(player)
+
+	task.delay(1, function()
+		if PlayerDataService.GetProfile(player) then
+			PlayerDataService.SendProfileUpdate(player)
+		end
+	end)
 
 	if profile.PlotUnlocked then
 		-- Если земля уже была открыта в сохранении, восстанавливаем визуальный участок.

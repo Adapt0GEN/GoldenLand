@@ -5,17 +5,37 @@
 
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
-      "$path": "src/ReplicatedStorage"
+      "Modules": {
+        "$className": "Folder",
+        "$path": "src/ReplicatedStorage/Modules"
+      },
+      "Remotes": {
+        "$className": "Folder",
+        "$path": "src/ReplicatedStorage/Remotes"
+      },
+      "Shared": {
+        "$className": "Folder",
+        "$path": "src/ReplicatedStorage/Shared"
+      }
     },
 
     "ServerScriptService": {
       "$className": "ServerScriptService",
-      "$path": "src/ServerScriptService"
+      "ServerMain": {
+        "$path": "src/ServerScriptService/ServerMain.server.lua"
+      },
+      "Services": {
+        "$className": "Folder",
+        "$path": "src/ServerScriptService/Services"
+      }
     },
 
     "StarterPlayer": {
       "$className": "StarterPlayer",
-      "$path": "src/StarterPlayer"
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "$path": "src/StarterPlayer/StarterPlayerScripts"
+      }
     },
 
     "StarterGui": {
