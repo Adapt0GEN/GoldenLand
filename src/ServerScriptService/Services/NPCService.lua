@@ -134,10 +134,7 @@ end
 local function giveLandReward(player, profile)
 	PlotService.UnlockPlot(player)
 	PlotService.CreateTestPlot(player)
-
-	if profile.HouseLevel < 2 then
-		PlotService.UpgradeHouse(player)
-	end
+	print(string.format("[NPCService] %s получил землю и дом уровня %d.", player.Name, profile.HouseLevel))
 end
 
 local function handleFirstStepsQuest(player, profile)

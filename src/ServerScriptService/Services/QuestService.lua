@@ -15,6 +15,7 @@ QuestService.Quests = {
 		ObjectiveText = "Собери дерево",
 		RewardGold = 25,
 		RewardWood = 5,
+		RewardStone = 3,
 		Objectives = {
 			wood_collected = {
 				TargetAmount = 3,
@@ -256,13 +257,15 @@ function QuestService.CompleteQuest(player, questId)
 
 	CurrencyService.AddGold(player, quest.RewardGold)
 	CurrencyService.AddWood(player, quest.RewardWood)
+	CurrencyService.AddStone(player, quest.RewardStone)
 
 	print(string.format(
-		"[QuestService] %s completed quest '%s' and received %d Gold, %d Wood.",
+		"[QuestService] %s completed quest '%s' and received %d Gold, %d Wood, %d Stone.",
 		player.Name,
 		quest.Name,
 		quest.RewardGold,
-		quest.RewardWood
+		quest.RewardWood,
+		quest.RewardStone
 	))
 
 	sendQuestUpdate(player, questId, "wood_collected", "completed")

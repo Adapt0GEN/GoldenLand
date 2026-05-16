@@ -1,5 +1,5 @@
 -- PlotService
--- Тестовый участок и визуальное развитие дома без DataStore.
+-- Тестовый участок, визуальное развитие дома и платное улучшение.
 
 local Workspace = game:GetService("Workspace")
 local PlayerDataService = require(script.Parent.PlayerDataService)
@@ -8,6 +8,20 @@ local PlotService = {}
 
 local PLOT_POSITION = Vector3.new(0, 0, 80)
 local PLOT_SIZE = Vector3.new(40, 1, 40)
+local MAX_HOUSE_LEVEL = 3
+
+local HOUSE_UPGRADE_COSTS = {
+	[1] = {
+		Gold = 25,
+		Wood = 5,
+		Stone = 3,
+	},
+	[2] = {
+		Gold = 50,
+		Wood = 10,
+		Stone = 6,
+	},
+}
 
 local function getPlotName(player)
 	return string.format("Plot_%d", player.UserId)
@@ -29,6 +43,35 @@ local function createPart(name, size, position, color, parent)
 	part.Parent = parent
 
 	return part
+end
+
+local function getUpgradeCost(houseLevel)
+	return HOUSE_UPGRADE_COSTS[houseLevel]
+end
+
+local function formatCost(cost)
+	if not cost then
+		return "нет стоимости"
+	end
+
+	return string.format("%d Gold, %d Wood, %d Stone", cost.Gold, cost.Wood, cost.Stone)
+end
+
+local function addHouseUpgradePrompt(promptPart)
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "HouseUpgradePrompt"
+	prompt.ObjectText = "Дом"
+	prompt.ActionText = "Улучшить"
+	prompt.HoldDuration = 0.5
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = promptPart
+
+	prompt.Triggered:Connect(function(player)
+		PlotService.TryUpgradeHouse(player)
+	end)
+
+	return prompt
 end
 
 local function createPlayerSign(player, plotModel)
@@ -125,7 +168,7 @@ end
 
 local function createLevelOneHouse(house)
 	-- Уровень 1: маленькая хижина.
-	createPart(
+	local body = createPart(
 		"HouseBody",
 		Vector3.new(10, 6, 10),
 		PLOT_POSITION + Vector3.new(0, 3.5, 0),
@@ -156,11 +199,13 @@ local function createLevelOneHouse(house)
 		Color3.fromRGB(170, 220, 255),
 		house
 	)
+
+	addHouseUpgradePrompt(body)
 end
 
 local function createLevelTwoHouse(house)
 	-- Уровень 2: дом крупнее, светлее и с боковой пристройкой.
-	createPart(
+	local body = createPart(
 		"HouseBody",
 		Vector3.new(14, 8, 12),
 		PLOT_POSITION + Vector3.new(0, 4.5, 0),
@@ -215,6 +260,85 @@ local function createLevelTwoHouse(house)
 		Color3.fromRGB(175, 225, 255),
 		house
 	)
+
+	addHouseUpgradePrompt(body)
+end
+
+local function createLevelThreeHouse(house)
+	-- Уровень 3: большой укреплённый дом с высокой крышей и вторым крылом.
+	local body = createPart(
+		"HouseBody",
+		Vector3.new(18, 10, 14),
+		PLOT_POSITION + Vector3.new(0, 5.5, 0),
+		Color3.fromRGB(205, 155, 90),
+		house
+	)
+
+	createPart(
+		"HouseLeftWing",
+		Vector3.new(7, 7, 10),
+		PLOT_POSITION + Vector3.new(-12, 4, 1),
+		Color3.fromRGB(185, 130, 75),
+		house
+	)
+
+	createPart(
+		"HouseRightWing",
+		Vector3.new(7, 7, 10),
+		PLOT_POSITION + Vector3.new(12, 4, 1),
+		Color3.fromRGB(185, 130, 75),
+		house
+	)
+
+	createPart(
+		"HouseRoof",
+		Vector3.new(20, 2.5, 16),
+		PLOT_POSITION + Vector3.new(0, 11.75, 0),
+		Color3.fromRGB(115, 35, 35),
+		house
+	)
+
+	createPart(
+		"LeftWingRoof",
+		Vector3.new(8, 2, 11),
+		PLOT_POSITION + Vector3.new(-12, 8.5, 1),
+		Color3.fromRGB(115, 35, 35),
+		house
+	)
+
+	createPart(
+		"RightWingRoof",
+		Vector3.new(8, 2, 11),
+		PLOT_POSITION + Vector3.new(12, 8.5, 1),
+		Color3.fromRGB(115, 35, 35),
+		house
+	)
+
+	createPart(
+		"HouseDoor",
+		Vector3.new(3.5, 5, 0.3),
+		PLOT_POSITION + Vector3.new(0, 3, -7.15),
+		Color3.fromRGB(75, 45, 25),
+		house
+	)
+
+	createPart(
+		"HouseWindowLeft",
+		Vector3.new(2.2, 2.2, 0.3),
+		PLOT_POSITION + Vector3.new(-5, 6, -7.15),
+		Color3.fromRGB(180, 230, 255),
+		house
+	)
+
+	createPart(
+		"HouseWindowRight",
+		Vector3.new(2.2, 2.2, 0.3),
+		PLOT_POSITION + Vector3.new(5, 6, -7.15),
+		Color3.fromRGB(180, 230, 255),
+		house
+	)
+
+	addHouseUpgradePrompt(body)
 end
 
 local function rebuildHouse(plotModel, houseLevel)
@@ -230,8 +354,10 @@ local function rebuildHouse(plotModel, houseLevel)
 
 	if houseLevel <= 1 then
 		createLevelOneHouse(house)
-	else
+	elseif houseLevel == 2 then
 		createLevelTwoHouse(house)
+	else
+		createLevelThreeHouse(house)
 	end
 
 	return house
@@ -299,19 +425,90 @@ function PlotService.CreateTestPlot(player)
 	return plotModel
 end
 
-function PlotService.UpgradeHouse(player)
+function PlotService.CanUpgradeHouse(player)
 	local profile = PlayerDataService.GetProfile(player)
 
 	if not profile then
-		warn(string.format("[PlotService] Profile for %s was not found. House was not upgraded.", player.Name))
+		return false, "профиль не найден"
+	end
+
+	if not profile.PlotUnlocked then
+		return false, "участок ещё не открыт"
+	end
+
+	local currentLevel = profile.HouseLevel or 1
+
+	if currentLevel >= MAX_HOUSE_LEVEL then
+		return false, "дом уже улучшен до максимума"
+	end
+
+	local cost = getUpgradeCost(currentLevel)
+
+	if not cost then
+		return false, "стоимость улучшения не найдена"
+	end
+
+	local missingResources = {}
+
+	if profile.Gold < cost.Gold then
+		table.insert(missingResources, string.format("Gold %d/%d", profile.Gold, cost.Gold))
+	end
+
+	if profile.Wood < cost.Wood then
+		table.insert(missingResources, string.format("Wood %d/%d", profile.Wood, cost.Wood))
+	end
+
+	if profile.Stone < cost.Stone then
+		table.insert(missingResources, string.format("Stone %d/%d", profile.Stone, cost.Stone))
+	end
+
+	if #missingResources > 0 then
+		return false, "не хватает ресурсов: " .. table.concat(missingResources, ", "), cost
+	end
+
+	return true, "можно улучшить", cost
+end
+
+function PlotService.TryUpgradeHouse(player)
+	local canUpgrade, reason, cost = PlotService.CanUpgradeHouse(player)
+
+	if not canUpgrade then
+		if reason == "дом уже улучшен до максимума" then
+			print(string.format("[PlotService] %s tried to upgrade house, but %s.", player.Name, reason))
+		else
+			warn(string.format("[PlotService] %s cannot upgrade house: %s.", player.Name, reason))
+		end
+
 		return false
 	end
 
+	local profile = PlayerDataService.GetProfile(player)
+	local oldLevel = profile.HouseLevel
+
+	profile.Gold -= cost.Gold
+	profile.Wood -= cost.Wood
+	profile.Stone -= cost.Stone
 	profile.HouseLevel += 1
 	updateHouseVisual(player, profile.HouseLevel)
-	print(string.format("[PlotService] %s upgraded house to level %d.", player.Name, profile.HouseLevel))
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player)
+	end
+
+	print(string.format(
+		"[PlotService] %s upgraded house from level %d to %d. Cost: %s.",
+		player.Name,
+		oldLevel,
+		profile.HouseLevel,
+		formatCost(cost)
+	))
 
 	return true
+end
+
+function PlotService.UpgradeHouse(player)
+	-- Старый публичный метод оставлен как совместимый путь к платному улучшению.
+	return PlotService.TryUpgradeHouse(player)
 end
 
 function PlotService.RemovePlot(player)
