@@ -1,6 +1,8 @@
 -- QuestService
 -- Ведёт простые квесты, прогресс целей и выдачу наград.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 local PlayerDataService = require(script.Parent.PlayerDataService)
 local CurrencyService = require(script.Parent.CurrencyService)
 
@@ -9,7 +11,8 @@ local QuestService = {}
 QuestService.Quests = {
 	first_steps = {
 		Id = "first_steps",
-		Name = "Собери дерево",
+		Name = "Первые шаги",
+		ObjectiveText = "Собери дерево",
 		RewardGold = 25,
 		RewardWood = 5,
 		Objectives = {
@@ -19,6 +22,26 @@ QuestService.Quests = {
 		},
 	},
 }
+
+local function getQuestUpdateEvent()
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+
+	if not remotes then
+		remotes = Instance.new("Folder")
+		remotes.Name = "Remotes"
+		remotes.Parent = ReplicatedStorage
+	end
+
+	local questUpdateEvent = remotes:FindFirstChild("QuestUpdateEvent")
+
+	if not questUpdateEvent then
+		questUpdateEvent = Instance.new("RemoteEvent")
+		questUpdateEvent.Name = "QuestUpdateEvent"
+		questUpdateEvent.Parent = remotes
+	end
+
+	return questUpdateEvent
+end
 
 local function getQuest(questId)
 	local quest = QuestService.Quests[questId]
@@ -46,6 +69,34 @@ local function getObjectiveTarget(quest, objectiveId)
 	end
 
 	return objective.TargetAmount
+end
+
+local function getQuestStatus(player, questId, objectiveId)
+	if QuestService.IsQuestReadyToComplete(player, questId) then
+		return "ready"
+	end
+
+	return "active"
+end
+
+local function sendQuestUpdate(player, questId, objectiveId, status)
+	local quest = getQuest(questId)
+
+	if not quest then
+		return
+	end
+
+	local required = getObjectiveTarget(quest, objectiveId) or 0
+	local current = QuestService.GetQuestProgress(player, questId, objectiveId)
+
+	getQuestUpdateEvent():FireClient(player, {
+		questId = questId,
+		title = quest.Name,
+		objectiveText = quest.ObjectiveText,
+		current = current,
+		required = required,
+		status = status,
+	})
 end
 
 function QuestService.StartQuest(player, questId)
@@ -76,6 +127,7 @@ function QuestService.StartQuest(player, questId)
 
 	profile.CurrentQuestId = questId
 	print(string.format("[QuestService] %s started quest '%s'.", player.Name, quest.Name))
+	sendQuestUpdate(player, questId, "wood_collected", "active")
 
 	return true
 end
@@ -122,6 +174,8 @@ function QuestService.AddQuestProgress(player, questId, objectiveId, amount)
 		objectiveId,
 		newAmount
 	))
+
+	sendQuestUpdate(player, questId, objectiveId, getQuestStatus(player, questId, objectiveId))
 
 	return newAmount
 end
@@ -210,6 +264,8 @@ function QuestService.CompleteQuest(player, questId)
 		quest.RewardGold,
 		quest.RewardWood
 	))
+
+	sendQuestUpdate(player, questId, "wood_collected", "completed")
 
 	return true
 end
