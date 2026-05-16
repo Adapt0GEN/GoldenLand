@@ -1,5 +1,5 @@
 -- ServerMain
--- Entry point for the first technical prototype of the GoldenLand service core.
+-- Точка входа для первого технического прототипа сервисного ядра GoldenLand.
 
 local Players = game:GetService("Players")
 
@@ -57,6 +57,7 @@ local function runTestSequence(player)
 
 		QuestService.CompleteQuest(player, "first_steps")
 		PlotService.UnlockPlot(player)
+		PlotService.CreateTestPlot(player)
 		PlotService.UpgradeHouse(player)
 		CurrencyService.AddStone(player, 3)
 		printProfile(player)
@@ -73,6 +74,7 @@ end
 
 local function onPlayerRemoving(player)
 	print(string.format("[ServerMain] %s is leaving. Clearing in-memory data...", player.Name))
+	PlotService.RemovePlot(player)
 	PlayerDataService.RemoveProfile(player)
 end
 
