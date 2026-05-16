@@ -7,8 +7,10 @@ local Services = script.Parent.Services
 local PlayerDataService = require(Services.PlayerDataService)
 local PlotService = require(Services.PlotService)
 local NPCService = require(Services.NPCService)
+local ResourceService = require(Services.ResourceService)
 
 NPCService.CreateVillageElder()
+ResourceService.CreateResourceNodes()
 
 local function onPlayerAdded(player)
 	print(string.format("[ServerMain] %s joined. Loading player data...", player.Name))

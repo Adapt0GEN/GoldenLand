@@ -1,5 +1,5 @@
 -- PlayerDataService
--- Stores simple in-memory player profiles for the current server session.
+-- Хранит простые профили игроков в памяти текущего сервера.
 
 local PlayerDataService = {}
 
@@ -15,6 +15,7 @@ local function createDefaultProfile(player)
 		PlotUnlocked = false,
 		CurrentQuestId = nil,
 		CompletedQuests = {},
+		QuestProgress = {},
 	}
 end
 

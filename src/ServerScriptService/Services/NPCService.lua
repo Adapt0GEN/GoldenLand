@@ -11,6 +11,8 @@ local NPCService = {}
 
 local ELDER_NAME = "VillageElder"
 local ELDER_POSITION = Vector3.new(10, 3, 10)
+local QUEST_ID = "first_steps"
+local OBJECTIVE_ID = "wood_collected"
 
 local function createPart(name, size, position, color, parent)
 	local part = Instance.new("Part")
@@ -58,6 +60,10 @@ local function printProfile(player)
 	print(string.format("  HouseLevel: %d", profile.HouseLevel))
 	print(string.format("  PlotUnlocked: %s", tostring(profile.PlotUnlocked)))
 	print(string.format("  CurrentQuestId: %s", tostring(profile.CurrentQuestId)))
+	print(string.format(
+		"  QuestProgress.first_steps.wood_collected: %d",
+		QuestService.GetQuestProgress(player, QUEST_ID, OBJECTIVE_ID)
+	))
 	print(string.format("  CompletedQuests: %s", formatCompletedQuests(profile.CompletedQuests)))
 end
 
@@ -72,27 +78,49 @@ local function getOrCreateProfile(player)
 	return PlayerDataService.CreateProfile(player)
 end
 
-local function completeFirstSteps(player, profile)
-	if profile.CompletedQuests.first_steps then
-		print(string.format("[NPCService] %s has already completed first_steps.", player.Name))
-		return false
-	end
+local function getWoodTarget()
+	return QuestService.Quests[QUEST_ID].Objectives[OBJECTIVE_ID].TargetAmount
+end
 
-	-- Первый ручной RPG-сценарий: староста выдаёт и сразу закрывает тестовый квест.
-	QuestService.StartQuest(player, "first_steps")
-
-	if not QuestService.CompleteQuest(player, "first_steps") then
-		return false
-	end
-
+local function giveLandReward(player, profile)
 	PlotService.UnlockPlot(player)
 	PlotService.CreateTestPlot(player)
 
 	if profile.HouseLevel < 2 then
 		PlotService.UpgradeHouse(player)
 	end
+end
 
-	return true
+local function handleFirstStepsQuest(player, profile)
+	if profile.CompletedQuests[QUEST_ID] then
+		print(string.format("[NPCService] %s, земля уже выдана.", player.Name))
+		return
+	end
+
+	if profile.CurrentQuestId ~= QUEST_ID then
+		if QuestService.StartQuest(player, QUEST_ID) then
+			print("[NPCService] Староста выдал квест: собери 3 дерева")
+		end
+
+		return
+	end
+
+	local woodProgress = QuestService.GetQuestProgress(player, QUEST_ID, OBJECTIVE_ID)
+	local woodTarget = getWoodTarget()
+
+	if woodProgress < woodTarget then
+		print(string.format(
+			"[NPCService] %s, прогресс квеста: дерево %d/%d.",
+			player.Name,
+			woodProgress,
+			woodTarget
+		))
+		return
+	end
+
+	if QuestService.CompleteQuest(player, QUEST_ID) then
+		giveLandReward(player, profile)
+	end
 end
 
 function NPCService.HandleVillageElderTalk(player)
@@ -103,7 +131,7 @@ function NPCService.HandleVillageElderTalk(player)
 		return
 	end
 
-	completeFirstSteps(player, profile)
+	handleFirstStepsQuest(player, profile)
 	printProfile(player)
 end
 
