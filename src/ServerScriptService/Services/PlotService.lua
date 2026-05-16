@@ -77,6 +77,52 @@ local function createPlayerSign(player, plotModel)
 	return leftPost, rightPost, sign
 end
 
+local function createPlotAreaSign(plotModel)
+	-- Общая табличка, чтобы участок читался как личная земля игрока.
+	createPart(
+		"LandSignLeftPost",
+		Vector3.new(0.4, 3, 0.4),
+		PLOT_POSITION + Vector3.new(9, 2, -17),
+		Color3.fromRGB(95, 65, 40),
+		plotModel
+	)
+
+	createPart(
+		"LandSignRightPost",
+		Vector3.new(0.4, 3, 0.4),
+		PLOT_POSITION + Vector3.new(17, 2, -17),
+		Color3.fromRGB(95, 65, 40),
+		plotModel
+	)
+
+	local sign = createPart(
+		"PersonalLandSign",
+		Vector3.new(10, 2, 0.4),
+		PLOT_POSITION + Vector3.new(13, 4, -17),
+		Color3.fromRGB(235, 205, 120),
+		plotModel
+	)
+
+	local surfaceGui = Instance.new("SurfaceGui")
+	surfaceGui.Name = "LandSurface"
+	surfaceGui.Face = Enum.NormalId.Front
+	surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	surfaceGui.PixelsPerStud = 50
+	surfaceGui.Parent = sign
+
+	local label = Instance.new("TextLabel")
+	label.Name = "LandLabel"
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Text = "Личная земля"
+	label.TextScaled = true
+	label.Font = Enum.Font.SourceSansBold
+	label.TextColor3 = Color3.fromRGB(55, 35, 20)
+	label.Parent = surfaceGui
+
+	return sign
+end
+
 local function createLevelOneHouse(house)
 	-- Уровень 1: маленькая хижина.
 	createPart(
@@ -246,6 +292,7 @@ function PlotService.CreateTestPlot(player)
 	base.Material = Enum.Material.Grass
 
 	createPlayerSign(player, plotModel)
+	createPlotAreaSign(plotModel)
 	rebuildHouse(plotModel, profile.HouseLevel)
 
 	print(string.format("[PlotService] Created test plot for %s.", player.Name))

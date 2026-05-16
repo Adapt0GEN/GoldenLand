@@ -1,9 +1,13 @@
 -- PlayerDataService
--- Хранит простые профили игроков в памяти текущего сервера.
+-- Загружает, хранит и сохраняет простые профили игроков.
+
+local DataStoreService = game:GetService("DataStoreService")
 
 local PlayerDataService = {}
 
 local profiles = {}
+local PROFILE_STORE_NAME = "GoldenLandPlayerProfiles_v1"
+local profileStore = nil
 
 local function createDefaultProfile(player)
 	return {
@@ -19,6 +23,121 @@ local function createDefaultProfile(player)
 	}
 end
 
+local function getProfileKey(player)
+	return string.format("Player_%d", player.UserId)
+end
+
+local function getProfileStore()
+	if profileStore then
+		return profileStore
+	end
+
+	local success, result = pcall(function()
+		return DataStoreService:GetDataStore(PROFILE_STORE_NAME)
+	end)
+
+	if not success then
+		warn(string.format("[PlayerDataService] DataStore is not available: %s", tostring(result)))
+		return nil
+	end
+
+	profileStore = result
+	return profileStore
+end
+
+local function copyTable(source)
+	local result = {}
+
+	if type(source) ~= "table" then
+		return result
+	end
+
+	for key, value in pairs(source) do
+		if type(value) == "table" then
+			result[key] = copyTable(value)
+		else
+			result[key] = value
+		end
+	end
+
+	return result
+end
+
+local function applyNumber(profile, savedProfile, fieldName)
+	if type(savedProfile[fieldName]) == "number" then
+		profile[fieldName] = savedProfile[fieldName]
+	end
+end
+
+local function normalizeLoadedProfile(player, savedProfile)
+	local profile = createDefaultProfile(player)
+
+	if type(savedProfile) ~= "table" then
+		return profile
+	end
+
+	-- Сохраняем только ожидаемые поля, чтобы старые или повреждённые данные не ломали профиль.
+	applyNumber(profile, savedProfile, "Gold")
+	applyNumber(profile, savedProfile, "Wood")
+	applyNumber(profile, savedProfile, "Stone")
+	applyNumber(profile, savedProfile, "HouseLevel")
+
+	if type(savedProfile.PlotUnlocked) == "boolean" then
+		profile.PlotUnlocked = savedProfile.PlotUnlocked
+	end
+
+	if type(savedProfile.CurrentQuestId) == "string" or savedProfile.CurrentQuestId == nil then
+		profile.CurrentQuestId = savedProfile.CurrentQuestId
+	end
+
+	if type(savedProfile.CompletedQuests) == "table" then
+		profile.CompletedQuests = copyTable(savedProfile.CompletedQuests)
+	end
+
+	if type(savedProfile.QuestProgress) == "table" then
+		profile.QuestProgress = copyTable(savedProfile.QuestProgress)
+	end
+
+	return profile
+end
+
+local function createSaveData(profile)
+	return {
+		UserId = profile.UserId,
+		Gold = profile.Gold,
+		Wood = profile.Wood,
+		Stone = profile.Stone,
+		HouseLevel = profile.HouseLevel,
+		PlotUnlocked = profile.PlotUnlocked,
+		CurrentQuestId = profile.CurrentQuestId,
+		CompletedQuests = copyTable(profile.CompletedQuests),
+		QuestProgress = copyTable(profile.QuestProgress),
+	}
+end
+
+local function loadProfile(player)
+	local store = getProfileStore()
+
+	if not store then
+		return nil, true
+	end
+
+	local success, result = pcall(function()
+		return store:GetAsync(getProfileKey(player))
+	end)
+
+	if not success then
+		warn(string.format("[PlayerDataService] Failed to load profile for %s: %s", player.Name, tostring(result)))
+		return nil, true
+	end
+
+	if result == nil then
+		return nil, false
+	end
+
+	return normalizeLoadedProfile(player, result), false
+end
+
 function PlayerDataService.CreateProfile(player)
 	local userId = player.UserId
 
@@ -27,10 +146,19 @@ function PlayerDataService.CreateProfile(player)
 		return profiles[userId]
 	end
 
-	local profile = createDefaultProfile(player)
-	profiles[userId] = profile
+	local profile, loadFailed = loadProfile(player)
 
-	print(string.format("[PlayerDataService] Created starter profile for %s (UserId: %d).", player.Name, userId))
+	if profile then
+		print(string.format("[PlayerDataService] Loaded saved profile for %s (UserId: %d).", player.Name, userId))
+	elseif loadFailed then
+		profile = createDefaultProfile(player)
+		warn(string.format("[PlayerDataService] Created temporary profile for %s because saved data could not be loaded.", player.Name))
+	else
+		profile = createDefaultProfile(player)
+		print(string.format("[PlayerDataService] Created starter profile for %s (UserId: %d).", player.Name, userId))
+	end
+
+	profiles[userId] = profile
 
 	return profile
 end
@@ -39,10 +167,40 @@ function PlayerDataService.GetProfile(player)
 	return profiles[player.UserId]
 end
 
+function PlayerDataService.SaveProfile(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		print(string.format("[PlayerDataService] No profile to save for %s.", player.Name))
+		return false
+	end
+
+	local store = getProfileStore()
+
+	if not store then
+		warn(string.format("[PlayerDataService] Profile for %s was not saved: DataStore is not available.", player.Name))
+		return false
+	end
+
+	local saveData = createSaveData(profile)
+	local success, result = pcall(function()
+		store:SetAsync(getProfileKey(player), saveData)
+	end)
+
+	if not success then
+		warn(string.format("[PlayerDataService] Failed to save profile for %s: %s", player.Name, tostring(result)))
+		return false
+	end
+
+	print(string.format("[PlayerDataService] Saved profile for %s.", player.Name))
+	return true
+end
+
 function PlayerDataService.RemoveProfile(player)
 	local userId = player.UserId
 
 	if profiles[userId] then
+		PlayerDataService.SaveProfile(player)
 		profiles[userId] = nil
 		print(string.format("[PlayerDataService] Removed profile for %s from memory.", player.Name))
 	else

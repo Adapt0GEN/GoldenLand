@@ -10,7 +10,7 @@ local PlotService = require(script.Parent.PlotService)
 local NPCService = {}
 
 local ELDER_NAME = "VillageElder"
-local ELDER_POSITION = Vector3.new(10, 3, 10)
+local ELDER_POSITION = Vector3.new(12, 3, 0)
 local QUEST_ID = "first_steps"
 local OBJECTIVE_ID = "wood_collected"
 
@@ -26,6 +26,55 @@ local function createPart(name, size, position, color, parent)
 	part.Parent = parent
 
 	return part
+end
+
+local function createTextSign(name, text, position, parent)
+	local signModel = Instance.new("Model")
+	signModel.Name = name
+	signModel.Parent = parent
+
+	createPart(
+		"LeftPost",
+		Vector3.new(0.3, 2.6, 0.3),
+		position + Vector3.new(-1.7, -0.8, 0),
+		Color3.fromRGB(90, 60, 35),
+		signModel
+	)
+
+	createPart(
+		"RightPost",
+		Vector3.new(0.3, 2.6, 0.3),
+		position + Vector3.new(1.7, -0.8, 0),
+		Color3.fromRGB(90, 60, 35),
+		signModel
+	)
+
+	local board = createPart(
+		"Board",
+		Vector3.new(4.5, 1.4, 0.35),
+		position + Vector3.new(0, 0.7, 0),
+		Color3.fromRGB(235, 205, 120),
+		signModel
+	)
+
+	local surfaceGui = Instance.new("SurfaceGui")
+	surfaceGui.Name = "TextSurface"
+	surfaceGui.Face = Enum.NormalId.Front
+	surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	surfaceGui.PixelsPerStud = 50
+	surfaceGui.Parent = board
+
+	local label = Instance.new("TextLabel")
+	label.Name = "TextLabel"
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextScaled = true
+	label.Font = Enum.Font.SourceSansBold
+	label.TextColor3 = Color3.fromRGB(55, 35, 20)
+	label.Parent = surfaceGui
+
+	return signModel
 end
 
 local function formatCompletedQuests(completedQuests)
@@ -177,6 +226,13 @@ function NPCService.CreateVillageElder()
 		Vector3.new(0.35, 5, 0.35),
 		ELDER_POSITION + Vector3.new(2.2, 0.5, -0.2),
 		Color3.fromRGB(95, 60, 35),
+		elderModel
+	)
+
+	createTextSign(
+		"ElderNameSign",
+		"Староста",
+		ELDER_POSITION + Vector3.new(0, 1, -4),
 		elderModel
 	)
 

@@ -14,9 +14,9 @@ local QUEST_ID = "first_steps"
 local OBJECTIVE_ID = "wood_collected"
 
 local TREE_POSITIONS = {
-	Vector3.new(-8, 0, 16),
-	Vector3.new(-2, 0, 20),
-	Vector3.new(4, 0, 16),
+	Vector3.new(20, 2, 8),
+	Vector3.new(25, 2, 10),
+	Vector3.new(30, 2, 6),
 }
 
 local function createPart(name, size, position, color, parent)
@@ -84,7 +84,7 @@ local function createTree(index, position, parent)
 	local trunk = createPart(
 		"Trunk",
 		Vector3.new(1.2, 4, 1.2),
-		position + Vector3.new(0, 2, 0),
+		position,
 		Color3.fromRGB(110, 70, 35),
 		treeModel
 	)
@@ -92,7 +92,7 @@ local function createTree(index, position, parent)
 	local leaves = createPart(
 		"Leaves",
 		Vector3.new(5, 5, 5),
-		position + Vector3.new(0, 5, 0),
+		position + Vector3.new(0, 3, 0),
 		Color3.fromRGB(50, 135, 65),
 		treeModel
 	)
