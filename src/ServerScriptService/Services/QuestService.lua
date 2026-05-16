@@ -147,14 +147,15 @@ function QuestService.AddQuestProgress(player, questId, objectiveId, amount)
 		return nil
 	end
 
-	if not getObjectiveTarget(quest, objectiveId) then
+	local objectiveTarget = getObjectiveTarget(quest, objectiveId)
+
+	if not objectiveTarget then
 		warn(string.format("[QuestService] Objective %s was not found in quest %s.", tostring(objectiveId), questId))
 		return nil
 	end
 
 	if profile.CompletedQuests[questId] then
-		print(string.format("[QuestService] %s has already completed quest '%s'.", player.Name, quest.Name))
-		return nil
+		return QuestService.GetQuestProgress(player, questId, objectiveId)
 	end
 
 	if profile.CurrentQuestId ~= questId then
@@ -164,7 +165,7 @@ function QuestService.AddQuestProgress(player, questId, objectiveId, amount)
 
 	local questProgress = ensureQuestProgress(profile, questId)
 	local currentAmount = questProgress[objectiveId] or 0
-	local newAmount = currentAmount + amount
+	local newAmount = math.min(currentAmount + amount, objectiveTarget)
 
 	questProgress[objectiveId] = newAmount
 

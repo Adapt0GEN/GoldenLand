@@ -218,6 +218,13 @@ function PlayerDataService.SendProfileUpdate(player)
 	end
 
 	getRemoteEvent("PlayerStatsUpdateEvent"):FireClient(player, publicProfile)
+	print(string.format(
+		"[PlayerDataService] Sent stats update: Gold=%d Wood=%d Stone=%d HouseLevel=%d",
+		publicProfile.Gold,
+		publicProfile.Wood,
+		publicProfile.Stone,
+		publicProfile.HouseLevel
+	))
 	return true
 end
 

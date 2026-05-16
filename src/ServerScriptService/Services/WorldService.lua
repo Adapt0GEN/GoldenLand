@@ -119,6 +119,16 @@ function WorldService.CreateStartWorld()
 	)
 	createTextSign("ResourceAreaSign", "Лес", Vector3.new(25, 2.5, 1), worldRoot)
 
+	-- Небольшая каменная зона рядом с лесом для повторяемой добычи Stone.
+	createAreaMarker(
+		"StoneArea",
+		Vector3.new(18, 0.35, 10),
+		Vector3.new(24, 0.05, 19),
+		Color3.fromRGB(105, 110, 115),
+		worldRoot
+	)
+	createTextSign("StoneAreaSign", "Камни", Vector3.new(24, 2.5, 13), worldRoot)
+
 	-- Маркер направления к личной земле игрока.
 	local plotMarker = Instance.new("Model")
 	plotMarker.Name = "PlotAreaMarker"

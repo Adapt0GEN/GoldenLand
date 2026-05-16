@@ -30,17 +30,17 @@
       }
     },
 
-    "StarterPlayer": {
-      "$className": "StarterPlayer",
-      "StarterPlayerScripts": {
-        "$className": "StarterPlayerScripts",
-        "$path": "src/StarterPlayer/StarterPlayerScripts"
-      }
-    },
+   "StarterPlayer": {
+  "$className": "StarterPlayer",
+  "StarterPlayerScripts": {
+    "$className": "StarterPlayerScripts",
+    "$path": "src/StarterPlayer/StarterPlayerScripts"
+  }
+},
 
-    "StarterGui": {
-      "$className": "StarterGui",
-      "$path": "src/StarterGui"
-    }
+"StarterGui": {
+  "$className": "StarterGui",
+  "$path": "src/StarterGui"
+}
   }
 }

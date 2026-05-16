@@ -4,6 +4,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local PlayerDataService = require(script.Parent.PlayerDataService)
+local CurrencyService = require(script.Parent.CurrencyService)
 
 local PlotService = {}
 
@@ -521,9 +522,11 @@ function PlotService.TryUpgradeHouse(player)
 	local profile = PlayerDataService.GetProfile(player)
 	local oldLevel = profile.HouseLevel
 
-	profile.Gold -= cost.Gold
-	profile.Wood -= cost.Wood
-	profile.Stone -= cost.Stone
+	if not CurrencyService.SpendResources(player, cost) then
+		sendPlayerMessage(player, "Не удалось списать ресурсы для улучшения дома")
+		return false
+	end
+
 	profile.HouseLevel += 1
 	updateHouseVisual(player, profile.HouseLevel)
 

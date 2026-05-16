@@ -1,5 +1,5 @@
 -- ResourceService
--- Создаёт простые деревья и добавляет прогресс квеста при сборе.
+-- Создаёт простые деревья, камни и золотую жилу, которые можно собирать повторяемо.
 
 local Workspace = game:GetService("Workspace")
 
@@ -12,12 +12,24 @@ local ResourceService = {}
 local RESOURCE_FOLDER_NAME = "ResourceNodes"
 local QUEST_ID = "first_steps"
 local OBJECTIVE_ID = "wood_collected"
+local TREE_RESPAWN_SECONDS = 10
+local STONE_RESPAWN_SECONDS = 10
+local GOLD_COOLDOWN_SECONDS = 2
 
 local TREE_POSITIONS = {
 	Vector3.new(20, 2, 8),
 	Vector3.new(25, 2, 10),
 	Vector3.new(30, 2, 6),
 }
+
+local STONE_POSITIONS = {
+	Vector3.new(18, 1.2, 18),
+	Vector3.new(24, 1.2, 20),
+	Vector3.new(30, 1.2, 18),
+}
+
+local GOLD_NODE_POSITION = Vector3.new(36, 1.4, 18)
+local goldMineCooldownsByUserId = {}
 
 local function createPart(name, size, position, color, parent)
 	local part = Instance.new("Part")
@@ -33,8 +45,64 @@ local function createPart(name, size, position, color, parent)
 	return part
 end
 
-local function getWoodTarget()
-	return QuestService.Quests[QUEST_ID].Objectives[OBJECTIVE_ID].TargetAmount
+local function setTreeAvailable(treeModel, prompt, isAvailable)
+	for _, descendant in ipairs(treeModel:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			descendant.Transparency = if isAvailable then 0 else 1
+			descendant.CanCollide = isAvailable
+			descendant.CanTouch = isAvailable
+			descendant.CanQuery = isAvailable
+		end
+	end
+
+	prompt.Enabled = isAvailable
+end
+
+local function respawnTreeAfterDelay(treeModel, prompt)
+	task.delay(TREE_RESPAWN_SECONDS, function()
+		if not treeModel.Parent then
+			return
+		end
+
+		setTreeAvailable(treeModel, prompt, true)
+		print("[ResourceService] Tree respawned")
+	end)
+end
+
+local function setStoneAvailable(stoneModel, prompt, isAvailable)
+	for _, descendant in ipairs(stoneModel:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			descendant.Transparency = if isAvailable then 0 else 1
+			descendant.CanCollide = isAvailable
+			descendant.CanTouch = isAvailable
+			descendant.CanQuery = isAvailable
+		end
+	end
+
+	prompt.Enabled = isAvailable
+end
+
+local function respawnStoneAfterDelay(stoneModel, prompt)
+	task.delay(STONE_RESPAWN_SECONDS, function()
+		if not stoneModel.Parent then
+			return
+		end
+
+		setStoneAvailable(stoneModel, prompt, true)
+		print("[ResourceService] Stone respawned")
+	end)
+end
+
+local function updateQuestProgressIfActive(player, profile)
+	if profile.CompletedQuests[QUEST_ID] then
+		return
+	end
+
+	if profile.CurrentQuestId ~= QUEST_ID then
+		return
+	end
+
+	QuestService.AddQuestProgress(player, QUEST_ID, OBJECTIVE_ID, 1)
 end
 
 local function collectTree(player, treeModel, prompt)
@@ -45,34 +113,66 @@ local function collectTree(player, treeModel, prompt)
 		return
 	end
 
-	if profile.CompletedQuests[QUEST_ID] then
-		print(string.format("[ResourceService] %s already completed the wood quest.", player.Name))
+	if not prompt.Enabled then
 		return
 	end
 
-	if profile.CurrentQuestId ~= QUEST_ID then
-		print(string.format("[ResourceService] %s must talk to the village elder before collecting quest wood.", player.Name))
-		return
-	end
+	setTreeAvailable(treeModel, prompt, false)
 
-	prompt.Enabled = false
-
-	local newProgress = QuestService.AddQuestProgress(player, QUEST_ID, OBJECTIVE_ID, 1)
-
-	if newProgress == nil then
-		prompt.Enabled = true
-		return
-	end
+	updateQuestProgressIfActive(player, profile)
 
 	CurrencyService.AddWood(player, 1)
-	treeModel:Destroy()
+	print("[ResourceService] Sent profile UI update after resource collect")
+	print(string.format("[ResourceService] %s collected wood", player.Name))
+	respawnTreeAfterDelay(treeModel, prompt)
+end
 
-	print(string.format(
-		"[ResourceService] %s collected a tree. Wood progress: %d/%d.",
-		player.Name,
-		newProgress,
-		getWoodTarget()
-	))
+local function mineStone(player, stoneModel, prompt)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		warn(string.format("[ResourceService] Profile for %s was not found. Stone was not mined.", player.Name))
+		return
+	end
+
+	if not prompt.Enabled then
+		return
+	end
+
+	setStoneAvailable(stoneModel, prompt, false)
+
+	CurrencyService.AddStone(player, 1)
+	print(string.format("[ResourceService] %s mined stone", player.Name))
+	respawnStoneAfterDelay(stoneModel, prompt)
+end
+
+local function canMineGold(player)
+	local now = os.clock()
+	local lastMineAt = goldMineCooldownsByUserId[player.UserId]
+
+	if lastMineAt and now - lastMineAt < GOLD_COOLDOWN_SECONDS then
+		return false
+	end
+
+	goldMineCooldownsByUserId[player.UserId] = now
+	return true
+end
+
+local function mineGold(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		warn(string.format("[ResourceService] Profile for %s was not found. Gold was not mined.", player.Name))
+		return
+	end
+
+	if not canMineGold(player) then
+		print(string.format("[ResourceService] %s tried to mine gold during cooldown", player.Name))
+		return
+	end
+
+	CurrencyService.AddGold(player, 1)
+	print(string.format("[ResourceService] %s mined gold", player.Name))
 end
 
 local function createTree(index, position, parent)
@@ -116,23 +216,102 @@ local function createTree(index, position, parent)
 	return treeModel
 end
 
+local function createStone(index, position, parent)
+	local stoneModel = Instance.new("Model")
+	stoneModel.Name = string.format("Stone_%d", index)
+	stoneModel.Parent = parent
+
+	local stone = createPart(
+		"Stone",
+		Vector3.new(4, 2.4, 3.5),
+		position,
+		Color3.fromRGB(115, 120, 125),
+		stoneModel
+	)
+	stone.Shape = Enum.PartType.Ball
+	stone.Material = Enum.Material.Slate
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "MinePrompt"
+	prompt.ActionText = "Добыть"
+	prompt.ObjectText = "Камень"
+	prompt.HoldDuration = 0.5
+	prompt.MaxActivationDistance = 10
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = stone
+
+	prompt.Triggered:Connect(function(player)
+		mineStone(player, stoneModel, prompt)
+	end)
+
+	stoneModel.PrimaryPart = stone
+
+	return stoneModel
+end
+
+local function createGoldNode(parent)
+	local goldNode = Instance.new("Model")
+	goldNode.Name = "GoldNode_01"
+	goldNode.Parent = parent
+
+	local vein = createPart(
+		"GoldVein",
+		Vector3.new(5, 2.8, 3.5),
+		GOLD_NODE_POSITION,
+		Color3.fromRGB(215, 165, 45),
+		goldNode
+	)
+	vein.Shape = Enum.PartType.Ball
+	vein.Material = Enum.Material.Slate
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "MineGoldPrompt"
+	prompt.ActionText = "Добывать золото"
+	prompt.ObjectText = "Золотая жила"
+	prompt.HoldDuration = 0.5
+	prompt.MaxActivationDistance = 10
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = vein
+
+	prompt.Triggered:Connect(function(player)
+		mineGold(player)
+	end)
+
+	goldNode.PrimaryPart = vein
+
+	return goldNode
+end
+
 function ResourceService.CreateResourceNodes()
-	local existingNodes = Workspace:FindFirstChild(RESOURCE_FOLDER_NAME)
+	local resourceNodes = Workspace:FindFirstChild(RESOURCE_FOLDER_NAME)
 
-	if existingNodes then
-		print("[ResourceService] Resource nodes already exist.")
-		return existingNodes
+	if not resourceNodes then
+		resourceNodes = Instance.new("Folder")
+		resourceNodes.Name = RESOURCE_FOLDER_NAME
+		resourceNodes.Parent = Workspace
 	end
-
-	local resourceNodes = Instance.new("Folder")
-	resourceNodes.Name = RESOURCE_FOLDER_NAME
-	resourceNodes.Parent = Workspace
 
 	for index, position in ipairs(TREE_POSITIONS) do
-		createTree(index, position, resourceNodes)
+		local treeName = string.format("Tree_%d", index)
+
+		if not resourceNodes:FindFirstChild(treeName) then
+			createTree(index, position, resourceNodes)
+		end
 	end
 
-	print("[ResourceService] Created 3 tree resource nodes.")
+	for index, position in ipairs(STONE_POSITIONS) do
+		local stoneName = string.format("Stone_%d", index)
+
+		if not resourceNodes:FindFirstChild(stoneName) then
+			createStone(index, position, resourceNodes)
+		end
+	end
+
+	if not resourceNodes:FindFirstChild("GoldNode_01") then
+		createGoldNode(resourceNodes)
+	end
+
+	print("[ResourceService] Resource nodes are ready: 3 trees, 3 stones and 1 gold node.")
 	return resourceNodes
 end
 

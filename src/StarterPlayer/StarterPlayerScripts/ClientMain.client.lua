@@ -71,6 +71,14 @@ local function updateStatsUi(data)
 	local stone = data.Stone or 0
 	local houseLevel = data.HouseLevel or 1
 
+	print(string.format(
+		"[ClientMain] Received stats update: Gold=%d Wood=%d Stone=%d HouseLevel=%d",
+		gold,
+		wood,
+		stone,
+		houseLevel
+	))
+
 	statsLabel.Text = string.format(
 		"Золото: %d\nДерево: %d\nКамень: %d\nДом: уровень %d",
 		gold,
