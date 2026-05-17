@@ -1,5 +1,5 @@
 -- ResourceService
--- Создаёт простые деревья, камни и золотую жилу, которые можно собирать повторяемо.
+-- Создаёт простые деревья, камни, металлическую руду и золотую жилу, которые можно собирать повторяемо.
 
 local Workspace = game:GetService("Workspace")
 
@@ -14,6 +14,7 @@ local QUEST_ID = "first_steps"
 local OBJECTIVE_ID = "wood_collected"
 local TREE_RESPAWN_SECONDS = 10
 local STONE_RESPAWN_SECONDS = 10
+local METAL_RESPAWN_SECONDS = 10
 local GOLD_COOLDOWN_SECONDS = 2
 
 local TREE_POSITIONS = {
@@ -26,6 +27,12 @@ local STONE_POSITIONS = {
 	Vector3.new(18, 1.2, 18),
 	Vector3.new(24, 1.2, 20),
 	Vector3.new(30, 1.2, 18),
+}
+
+local METAL_POSITIONS = {
+	Vector3.new(14, 1.2, 28),
+	Vector3.new(21, 1.2, 31),
+	Vector3.new(28, 1.2, 28),
 }
 
 local GOLD_NODE_POSITION = Vector3.new(36, 1.4, 18)
@@ -93,6 +100,30 @@ local function respawnStoneAfterDelay(stoneModel, prompt)
 	end)
 end
 
+local function setMetalAvailable(metalModel, prompt, isAvailable)
+	for _, descendant in ipairs(metalModel:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			descendant.Transparency = if isAvailable then 0 else 1
+			descendant.CanCollide = isAvailable
+			descendant.CanTouch = isAvailable
+			descendant.CanQuery = isAvailable
+		end
+	end
+
+	prompt.Enabled = isAvailable
+end
+
+local function respawnMetalAfterDelay(metalModel, prompt)
+	task.delay(METAL_RESPAWN_SECONDS, function()
+		if not metalModel.Parent then
+			return
+		end
+
+		setMetalAvailable(metalModel, prompt, true)
+		print("[ResourceService] Metal node respawned")
+	end)
+end
+
 local function updateQuestProgressIfActive(player, profile)
 	if profile.CompletedQuests[QUEST_ID] then
 		return
@@ -144,6 +175,25 @@ local function mineStone(player, stoneModel, prompt)
 	CurrencyService.AddStone(player, 1)
 	print(string.format("[ResourceService] %s mined stone", player.Name))
 	respawnStoneAfterDelay(stoneModel, prompt)
+end
+
+local function mineMetal(player, metalModel, prompt)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		warn(string.format("[ResourceService] Profile for %s was not found. Metal was not mined.", player.Name))
+		return
+	end
+
+	if not prompt.Enabled then
+		return
+	end
+
+	setMetalAvailable(metalModel, prompt, false)
+
+	CurrencyService.AddMetal(player, 1)
+	print(string.format("[ResourceService] %s mined metal", player.Name))
+	respawnMetalAfterDelay(metalModel, prompt)
 end
 
 local function canMineGold(player)
@@ -249,6 +299,39 @@ local function createStone(index, position, parent)
 	return stoneModel
 end
 
+local function createMetalNode(index, position, parent)
+	local metalModel = Instance.new("Model")
+	metalModel.Name = string.format("MetalNode_%d", index)
+	metalModel.Parent = parent
+
+	local ore = createPart(
+		"MetalOre",
+		Vector3.new(4.2, 2.2, 3.2),
+		position,
+		Color3.fromRGB(105, 115, 130),
+		metalModel
+	)
+	ore.Shape = Enum.PartType.Ball
+	ore.Material = Enum.Material.Metal
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "MineMetalPrompt"
+	prompt.ObjectText = "Металлическая руда"
+	prompt.ActionText = "Добыть металл"
+	prompt.HoldDuration = 0.5
+	prompt.MaxActivationDistance = 10
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = ore
+
+	prompt.Triggered:Connect(function(player)
+		mineMetal(player, metalModel, prompt)
+	end)
+
+	metalModel.PrimaryPart = ore
+
+	return metalModel
+end
+
 local function createGoldNode(parent)
 	local goldNode = Instance.new("Model")
 	goldNode.Name = "GoldNode_01"
@@ -307,11 +390,19 @@ function ResourceService.CreateResourceNodes()
 		end
 	end
 
+	for index, position in ipairs(METAL_POSITIONS) do
+		local metalName = string.format("MetalNode_%d", index)
+
+		if not resourceNodes:FindFirstChild(metalName) then
+			createMetalNode(index, position, resourceNodes)
+		end
+	end
+
 	if not resourceNodes:FindFirstChild("GoldNode_01") then
 		createGoldNode(resourceNodes)
 	end
 
-	print("[ResourceService] Resource nodes are ready: 3 trees, 3 stones and 1 gold node.")
+	print("[ResourceService] Resource nodes are ready: 3 trees, 3 stones, 3 metal nodes and 1 gold node.")
 	return resourceNodes
 end
 

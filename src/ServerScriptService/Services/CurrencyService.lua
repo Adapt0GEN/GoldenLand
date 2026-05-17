@@ -7,12 +7,13 @@ local CurrencyService = {}
 
 local function printResourceState(player, profile, action)
 	print(string.format(
-		"[CurrencyService] %s for %s. Gold=%d Wood=%d Stone=%d.",
+		"[CurrencyService] %s for %s. Gold=%d Wood=%d Stone=%d Metal=%d.",
 		action,
 		player.Name,
 		profile.Gold,
 		profile.Wood,
-		profile.Stone
+		profile.Stone,
+		profile.Metal
 	))
 end
 
@@ -64,6 +65,10 @@ function CurrencyService.AddStone(player, amount)
 	return addResource(player, "Stone", amount)
 end
 
+function CurrencyService.AddMetal(player, amount)
+	return addResource(player, "Metal", amount)
+end
+
 function CurrencyService.SpendResources(player, cost)
 	local profile = PlayerDataService.GetProfile(player)
 
@@ -75,10 +80,12 @@ function CurrencyService.SpendResources(player, cost)
 	local goldCost = cost.Gold or 0
 	local woodCost = cost.Wood or 0
 	local stoneCost = cost.Stone or 0
+	local metalCost = cost.Metal or 0
 
 	profile.Gold -= goldCost
 	profile.Wood -= woodCost
 	profile.Stone -= stoneCost
+	profile.Metal -= metalCost
 
 	printResourceState(player, profile, "Resource totals after spend")
 	sendProfileUpdate(player)

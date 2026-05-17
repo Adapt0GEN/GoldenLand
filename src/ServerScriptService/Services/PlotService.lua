@@ -11,6 +11,20 @@ local PlotService = {}
 local PLOT_POSITION = Vector3.new(0, 0, 80)
 local PLOT_SIZE = Vector3.new(40, 1, 40)
 local MAX_HOUSE_LEVEL = 3
+local STORAGE_POSITION = PLOT_POSITION + Vector3.new(-12, 0, 14)
+local WORKSHOP_POSITION = PLOT_POSITION + Vector3.new(13, 0.8, 11)
+
+local STORAGE_BUILD_COST = {
+	Gold = 15,
+	Wood = 10,
+	Stone = 5,
+}
+
+local WORKSHOP_BUILD_COST = {
+	Gold = 25,
+	Wood = 15,
+	Stone = 10,
+}
 
 local HOUSE_UPGRADE_COSTS = {
 	[1] = {
@@ -95,6 +109,53 @@ local function addHouseUpgradePrompt(promptPart)
 
 	prompt.Triggered:Connect(function(player)
 		PlotService.TryUpgradeHouse(player)
+	end)
+
+	return prompt
+end
+
+local function addStorageBuildPrompt(promptPart)
+	local existingPrompt = promptPart:FindFirstChild("StorageBuildPrompt")
+
+	if existingPrompt then
+		return existingPrompt
+	end
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "StorageBuildPrompt"
+	prompt.ObjectText = "Склад"
+	prompt.ActionText = "Построить склад"
+	prompt.HoldDuration = 0.5
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = promptPart
+
+	prompt.Triggered:Connect(function(player)
+		PlotService.TryBuildStorage(player)
+	end)
+
+	return prompt
+end
+
+local function addWorkshopBuildPrompt(promptPart)
+	local existingPrompt = promptPart:FindFirstChild("WorkshopBuildPrompt")
+
+	if existingPrompt then
+		return existingPrompt
+	end
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "WorkshopBuildPrompt"
+	prompt.ObjectText = "Мастерская"
+	prompt.ActionText = "Построить мастерскую"
+	prompt.HoldDuration = 0.5
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt.Enabled = true
+	prompt.Parent = promptPart
+
+	prompt.Triggered:Connect(function(player)
+		PlotService.TryBuildWorkshop(player)
 	end)
 
 	return prompt
@@ -367,6 +428,300 @@ local function createLevelThreeHouse(house)
 	addHouseUpgradePrompt(body)
 end
 
+local function removeStorageBuildSpot(plotModel)
+	local buildSpot = plotModel:FindFirstChild("StorageBuildSpot")
+
+	if buildSpot then
+		buildSpot:Destroy()
+	end
+end
+
+local function createStorageBuildSpot(plotModel)
+	if plotModel:FindFirstChild("StorageBuilding") then
+		removeStorageBuildSpot(plotModel)
+		return nil
+	end
+
+	local existingBuildSpot = plotModel:FindFirstChild("StorageBuildSpot")
+
+	if existingBuildSpot then
+		return existingBuildSpot
+	end
+
+	local buildSpot = createPart(
+		"StorageBuildSpot",
+		Vector3.new(8, 0.35, 6),
+		STORAGE_POSITION + Vector3.new(0, 0.45, 0),
+		Color3.fromRGB(210, 185, 95),
+		plotModel
+	)
+	buildSpot.Material = Enum.Material.SmoothPlastic
+	buildSpot.Transparency = 0.25
+
+	addStorageBuildPrompt(buildSpot)
+
+	return buildSpot
+end
+
+local function createStorageBuilding(plotModel)
+	removeStorageBuildSpot(plotModel)
+
+	local existingStorage = plotModel:FindFirstChild("StorageBuilding")
+
+	if existingStorage then
+		return existingStorage
+	end
+
+	local storage = Instance.new("Model")
+	storage.Name = "StorageBuilding"
+	storage.Parent = plotModel
+
+	createPart(
+		"StorageBody",
+		Vector3.new(8, 5, 6),
+		STORAGE_POSITION + Vector3.new(0, 3, 0),
+		Color3.fromRGB(130, 85, 45),
+		storage
+	)
+
+	createPart(
+		"StorageRoof",
+		Vector3.new(9, 1.5, 7),
+		STORAGE_POSITION + Vector3.new(0, 6.25, 0),
+		Color3.fromRGB(95, 50, 35),
+		storage
+	)
+
+	createPart(
+		"StorageDoor",
+		Vector3.new(2.2, 3, 0.3),
+		STORAGE_POSITION + Vector3.new(0, 2.25, -3.15),
+		Color3.fromRGB(65, 40, 25),
+		storage
+	)
+
+	createPart(
+		"StorageCrate",
+		Vector3.new(2.5, 1.5, 2),
+		STORAGE_POSITION + Vector3.new(3, 1.15, 1.5),
+		Color3.fromRGB(160, 105, 55),
+		storage
+	)
+
+	return storage
+end
+
+local function removeWorkshopBuildSpot(plotModel)
+	local buildSpot = plotModel:FindFirstChild("WorkshopBuildSpot")
+
+	if buildSpot then
+		buildSpot:Destroy()
+	end
+
+	local buildSign = plotModel:FindFirstChild("WorkshopBuildSign")
+
+	if buildSign then
+		buildSign:Destroy()
+	end
+end
+
+local function createWorkshopBuildSign(plotModel)
+	local existingSign = plotModel:FindFirstChild("WorkshopBuildSign")
+
+	if existingSign then
+		return existingSign
+	end
+
+	local signModel = Instance.new("Model")
+	signModel.Name = "WorkshopBuildSign"
+	signModel.Parent = plotModel
+
+	local signPosition = WORKSHOP_POSITION + Vector3.new(0, 1.4, -5.5)
+
+	createPart(
+		"WorkshopBuildSignLeftPost",
+		Vector3.new(0.35, 2.4, 0.35),
+		signPosition + Vector3.new(-2.4, 0, 0),
+		Color3.fromRGB(90, 60, 35),
+		signModel
+	)
+
+	createPart(
+		"WorkshopBuildSignRightPost",
+		Vector3.new(0.35, 2.4, 0.35),
+		signPosition + Vector3.new(2.4, 0, 0),
+		Color3.fromRGB(90, 60, 35),
+		signModel
+	)
+
+	local board = createPart(
+		"WorkshopBuildSignBoard",
+		Vector3.new(5.8, 1.8, 0.35),
+		signPosition + Vector3.new(0, 1.05, 0),
+		Color3.fromRGB(210, 185, 240),
+		signModel
+	)
+
+	local surfaceGui = Instance.new("SurfaceGui")
+	surfaceGui.Name = "WorkshopBuildSignSurface"
+	surfaceGui.Face = Enum.NormalId.Front
+	surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	surfaceGui.PixelsPerStud = 50
+	surfaceGui.Parent = board
+
+	local label = Instance.new("TextLabel")
+	label.Name = "WorkshopBuildSignLabel"
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Text = "Место для мастерской"
+	label.TextScaled = true
+	label.Font = Enum.Font.SourceSansBold
+	label.TextColor3 = Color3.fromRGB(45, 30, 65)
+	label.Parent = surfaceGui
+
+	return signModel
+end
+
+local function createWorkshopBuildSpot(player, plotModel)
+	if plotModel:FindFirstChild("WorkshopBuilding") then
+		removeWorkshopBuildSpot(plotModel)
+		return nil
+	end
+
+	local existingBuildSpot = plotModel:FindFirstChild("WorkshopBuildSpot")
+
+	if existingBuildSpot then
+		addWorkshopBuildPrompt(existingBuildSpot)
+		createWorkshopBuildSign(plotModel)
+		return existingBuildSpot
+	end
+
+	local buildSpot = createPart(
+		"WorkshopBuildSpot",
+		Vector3.new(9, 0.35, 9),
+		WORKSHOP_POSITION,
+		Color3.fromRGB(160, 120, 220),
+		plotModel
+	)
+	buildSpot.Material = Enum.Material.SmoothPlastic
+	buildSpot.Transparency = 0.12
+	buildSpot.CanCollide = false
+
+	addWorkshopBuildPrompt(buildSpot)
+	createWorkshopBuildSign(plotModel)
+
+	print(string.format("[PlotService] Created workshop build spot for %s.", player.Name))
+	return buildSpot
+end
+
+local function createWorkshopBuilding(player, plotModel)
+	removeWorkshopBuildSpot(plotModel)
+
+	local existingWorkshop = plotModel:FindFirstChild("WorkshopBuilding")
+
+	if existingWorkshop then
+		return existingWorkshop
+	end
+
+	local workshop = Instance.new("Model")
+	workshop.Name = "WorkshopBuilding"
+	workshop.Parent = plotModel
+
+	createPart(
+		"WorkshopBase",
+		Vector3.new(10, 0.5, 9),
+		WORKSHOP_POSITION + Vector3.new(0, 0.05, 0),
+		Color3.fromRGB(95, 90, 100),
+		workshop
+	)
+
+	createPart(
+		"WorkshopBody",
+		Vector3.new(8, 5, 7),
+		WORKSHOP_POSITION + Vector3.new(0, 2.85, 0),
+		Color3.fromRGB(115, 95, 135),
+		workshop
+	)
+
+	createPart(
+		"WorkshopRoof",
+		Vector3.new(9.5, 1.4, 8.5),
+		WORKSHOP_POSITION + Vector3.new(0, 5.95, 0),
+		Color3.fromRGB(65, 55, 85),
+		workshop
+	)
+
+	createPart(
+		"WorkshopDoor",
+		Vector3.new(2.2, 3, 0.3),
+		WORKSHOP_POSITION + Vector3.new(-2.3, 1.95, -3.65),
+		Color3.fromRGB(55, 38, 35),
+		workshop
+	)
+
+	createPart(
+		"WorkshopWindow",
+		Vector3.new(2.2, 1.6, 0.3),
+		WORKSHOP_POSITION + Vector3.new(2.2, 3.2, -3.65),
+		Color3.fromRGB(180, 225, 240),
+		workshop
+	)
+
+	createPart(
+		"Workbench",
+		Vector3.new(3, 1.2, 1.6),
+		WORKSHOP_POSITION + Vector3.new(3.4, 1.25, 1.7),
+		Color3.fromRGB(145, 90, 50),
+		workshop
+	)
+
+	createPart(
+		"WorkshopAnvil",
+		Vector3.new(1.8, 0.8, 1),
+		WORKSHOP_POSITION + Vector3.new(-3.2, 1.05, 1.8),
+		Color3.fromRGB(70, 75, 80),
+		workshop
+	)
+
+	print(string.format("[PlotService] %s built workshop visual.", player.Name))
+	return workshop
+end
+
+local function updateStorageVisual(player, profile)
+	local plotModel = getPlot(player)
+
+	if not plotModel then
+		return false
+	end
+
+	if profile.StorageBuilt then
+		createStorageBuilding(plotModel)
+	else
+		createStorageBuildSpot(plotModel)
+	end
+
+	return true
+end
+
+local function updateWorkshopVisual(player, profile)
+	local plotModel = getPlot(player)
+
+	if not plotModel then
+		return false
+	end
+
+	if profile.WorkshopBuilt then
+		print(string.format("[PlotService] Workshop already built for %s. Restoring visual.", player.Name))
+		createWorkshopBuilding(player, plotModel)
+	elseif profile.StorageBuilt then
+		createWorkshopBuildSpot(player, plotModel)
+	else
+		removeWorkshopBuildSpot(plotModel)
+	end
+
+	return true
+end
+
 local function rebuildHouse(plotModel, houseLevel)
 	local oldHouse = plotModel:FindFirstChild("House")
 
@@ -430,6 +785,8 @@ function PlotService.CreateTestPlot(player)
 
 	if existingPlot then
 		print(string.format("[PlotService] Test plot for %s already exists.", player.Name))
+		updateStorageVisual(player, profile)
+		updateWorkshopVisual(player, profile)
 		return existingPlot
 	end
 
@@ -450,9 +807,190 @@ function PlotService.CreateTestPlot(player)
 	createPlayerSign(player, plotModel)
 	createPlotAreaSign(plotModel)
 	rebuildHouse(plotModel, profile.HouseLevel)
+	updateStorageVisual(player, profile)
+	updateWorkshopVisual(player, profile)
 
 	print(string.format("[PlotService] Created test plot for %s.", player.Name))
 	return plotModel
+end
+
+function PlotService.CanBuildStorage(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return false, "профиль не найден"
+	end
+
+	if not profile.PlotUnlocked then
+		return false, "участок ещё не открыт"
+	end
+
+	if profile.StorageBuilt then
+		return false, "склад уже построен"
+	end
+
+	local missingResources = {}
+
+	if profile.Gold < STORAGE_BUILD_COST.Gold then
+		table.insert(missingResources, string.format("Gold %d/%d", profile.Gold, STORAGE_BUILD_COST.Gold))
+	end
+
+	if profile.Wood < STORAGE_BUILD_COST.Wood then
+		table.insert(missingResources, string.format("Wood %d/%d", profile.Wood, STORAGE_BUILD_COST.Wood))
+	end
+
+	if profile.Stone < STORAGE_BUILD_COST.Stone then
+		table.insert(missingResources, string.format("Stone %d/%d", profile.Stone, STORAGE_BUILD_COST.Stone))
+	end
+
+	if #missingResources > 0 then
+		return false, "не хватает ресурсов: " .. table.concat(missingResources, ", "), STORAGE_BUILD_COST
+	end
+
+	return true, "можно построить", STORAGE_BUILD_COST
+end
+
+function PlotService.TryBuildStorage(player)
+	local canBuild, reason, cost = PlotService.CanBuildStorage(player)
+
+	if not canBuild then
+		if reason == "склад уже построен" then
+			print(string.format("[PlotService] %s tried to build storage, but storage already exists.", player.Name))
+		elseif string.find(reason, "не хватает ресурсов", 1, true) then
+			warn(string.format("[PlotService] %s cannot build storage: %s.", player.Name, reason))
+			sendPlayerMessage(player, "Недостаточно ресурсов для строительства склада")
+		else
+			warn(string.format("[PlotService] %s cannot build storage: %s.", player.Name, reason))
+			sendPlayerMessage(player, "Склад нельзя построить")
+		end
+
+		return false
+	end
+
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		sendPlayerMessage(player, "Склад нельзя построить")
+		return false
+	end
+
+	if not CurrencyService.SpendResources(player, cost) then
+		sendPlayerMessage(player, "Не удалось списать ресурсы для строительства склада")
+		return false
+	end
+
+	profile.StorageBuilt = true
+	updateStorageVisual(player, profile)
+	updateWorkshopVisual(player, profile)
+
+	if PlayerDataService.SendProfileUpdate then
+		PlayerDataService.SendProfileUpdate(player)
+	end
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player)
+	end
+
+	sendPlayerMessage(player, "Склад построен")
+
+	print(string.format(
+		"[PlotService] %s built storage. Cost: %s.",
+		player.Name,
+		formatCost(STORAGE_BUILD_COST)
+	))
+
+	return true
+end
+
+function PlotService.CanBuildWorkshop(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return false, "профиль не найден"
+	end
+
+	if not profile.PlotUnlocked then
+		return false, "участок ещё не открыт"
+	end
+
+	if profile.StorageBuilt ~= true then
+		return false, "склад не построен"
+	end
+
+	if profile.WorkshopBuilt then
+		return false, "мастерская уже построена"
+	end
+
+	local missingResources = {}
+
+	if profile.Gold < WORKSHOP_BUILD_COST.Gold then
+		table.insert(missingResources, string.format("Gold %d/%d", profile.Gold, WORKSHOP_BUILD_COST.Gold))
+	end
+
+	if profile.Wood < WORKSHOP_BUILD_COST.Wood then
+		table.insert(missingResources, string.format("Wood %d/%d", profile.Wood, WORKSHOP_BUILD_COST.Wood))
+	end
+
+	if profile.Stone < WORKSHOP_BUILD_COST.Stone then
+		table.insert(missingResources, string.format("Stone %d/%d", profile.Stone, WORKSHOP_BUILD_COST.Stone))
+	end
+
+	if #missingResources > 0 then
+		return false, "не хватает ресурсов: " .. table.concat(missingResources, ", "), WORKSHOP_BUILD_COST
+	end
+
+	return true, "можно построить", WORKSHOP_BUILD_COST
+end
+
+function PlotService.TryBuildWorkshop(player)
+	print(string.format("[PlotService] %s tried to build workshop.", player.Name))
+
+	local canBuild, reason, cost = PlotService.CanBuildWorkshop(player)
+
+	if not canBuild then
+		if reason == "склад не построен" then
+			warn(string.format("[PlotService] %s cannot build workshop: storage is not built.", player.Name))
+			sendPlayerMessage(player, "Сначала постройте склад")
+		elseif reason == "мастерская уже построена" then
+			print(string.format("[PlotService] %s tried to build workshop, but workshop already exists.", player.Name))
+		elseif string.find(reason, "не хватает ресурсов", 1, true) then
+			warn(string.format("[PlotService] %s cannot build workshop: not enough resources.", player.Name))
+			sendPlayerMessage(player, "Недостаточно ресурсов для строительства мастерской")
+		else
+			warn(string.format("[PlotService] %s cannot build workshop: %s.", player.Name, reason))
+			sendPlayerMessage(player, "Мастерскую нельзя построить")
+		end
+
+		return false
+	end
+
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		warn(string.format("[PlotService] Profile for %s was not found. Workshop was not built.", player.Name))
+		return false
+	end
+
+	if not CurrencyService.SpendResources(player, cost) then
+		sendPlayerMessage(player, "Не удалось списать ресурсы для строительства мастерской")
+		return false
+	end
+
+	profile.WorkshopBuilt = true
+	updateWorkshopVisual(player, profile)
+
+	if PlayerDataService.SendProfileUpdate then
+		PlayerDataService.SendProfileUpdate(player)
+	end
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player)
+	end
+
+	sendPlayerMessage(player, "Мастерская построена")
+	print(string.format("[PlotService] %s built workshop.", player.Name))
+
+	return true
 end
 
 function PlotService.CanUpgradeHouse(player)

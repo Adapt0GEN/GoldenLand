@@ -36,8 +36,11 @@ local function createDefaultProfile(player)
 		Gold = 0,
 		Wood = 0,
 		Stone = 0,
+		Metal = 0,
 		HouseLevel = 1,
 		PlotUnlocked = false,
+		StorageBuilt = false,
+		WorkshopBuilt = false,
 		CurrentQuestId = nil,
 		CompletedQuests = {},
 		QuestProgress = {},
@@ -101,10 +104,19 @@ local function normalizeLoadedProfile(player, savedProfile)
 	applyNumber(profile, savedProfile, "Gold")
 	applyNumber(profile, savedProfile, "Wood")
 	applyNumber(profile, savedProfile, "Stone")
+	applyNumber(profile, savedProfile, "Metal")
 	applyNumber(profile, savedProfile, "HouseLevel")
 
 	if type(savedProfile.PlotUnlocked) == "boolean" then
 		profile.PlotUnlocked = savedProfile.PlotUnlocked
+	end
+
+	if type(savedProfile.StorageBuilt) == "boolean" then
+		profile.StorageBuilt = savedProfile.StorageBuilt
+	end
+
+	if type(savedProfile.WorkshopBuilt) == "boolean" then
+		profile.WorkshopBuilt = savedProfile.WorkshopBuilt
 	end
 
 	if type(savedProfile.CurrentQuestId) == "string" or savedProfile.CurrentQuestId == nil then
@@ -128,8 +140,11 @@ local function createSaveData(profile)
 		Gold = profile.Gold,
 		Wood = profile.Wood,
 		Stone = profile.Stone,
+		Metal = profile.Metal,
 		HouseLevel = profile.HouseLevel,
 		PlotUnlocked = profile.PlotUnlocked,
+		StorageBuilt = profile.StorageBuilt,
+		WorkshopBuilt = profile.WorkshopBuilt,
 		CurrentQuestId = profile.CurrentQuestId,
 		CompletedQuests = copyTable(profile.CompletedQuests),
 		QuestProgress = copyTable(profile.QuestProgress),
@@ -205,8 +220,11 @@ function PlayerDataService.GetPublicProfile(player)
 		Gold = profile.Gold,
 		Wood = profile.Wood,
 		Stone = profile.Stone,
+		Metal = profile.Metal,
 		HouseLevel = profile.HouseLevel,
 		PlotUnlocked = profile.PlotUnlocked,
+		StorageBuilt = profile.StorageBuilt,
+		WorkshopBuilt = profile.WorkshopBuilt,
 	}
 end
 
@@ -219,10 +237,11 @@ function PlayerDataService.SendProfileUpdate(player)
 
 	getRemoteEvent("PlayerStatsUpdateEvent"):FireClient(player, publicProfile)
 	print(string.format(
-		"[PlayerDataService] Sent stats update: Gold=%d Wood=%d Stone=%d HouseLevel=%d",
+		"[PlayerDataService] Sent stats update: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d",
 		publicProfile.Gold,
 		publicProfile.Wood,
 		publicProfile.Stone,
+		publicProfile.Metal,
 		publicProfile.HouseLevel
 	))
 	return true

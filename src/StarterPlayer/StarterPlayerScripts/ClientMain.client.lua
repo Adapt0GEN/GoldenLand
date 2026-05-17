@@ -18,7 +18,7 @@ screenGui.Parent = playerGui
 
 local statsLabel = Instance.new("TextLabel")
 statsLabel.Name = "StatsLabel"
-statsLabel.Size = UDim2.fromOffset(260, 110)
+statsLabel.Size = UDim2.fromOffset(260, 135)
 statsLabel.Position = UDim2.fromOffset(20, 20)
 statsLabel.BackgroundColor3 = Color3.fromRGB(28, 34, 30)
 statsLabel.BackgroundTransparency = 0.12
@@ -29,13 +29,13 @@ statsLabel.Font = Enum.Font.SourceSansBold
 statsLabel.TextWrapped = true
 statsLabel.TextXAlignment = Enum.TextXAlignment.Left
 statsLabel.TextYAlignment = Enum.TextYAlignment.Center
-statsLabel.Text = "Золото: 0\nДерево: 0\nКамень: 0\nДом: уровень 1"
+statsLabel.Text = "Золото: 0\nДерево: 0\nКамень: 0\nМеталл: 0\nДом: уровень 1"
 statsLabel.Parent = screenGui
 
 local questLabel = Instance.new("TextLabel")
 questLabel.Name = "QuestLabel"
 questLabel.Size = UDim2.fromOffset(320, 90)
-questLabel.Position = UDim2.fromOffset(20, 145)
+questLabel.Position = UDim2.fromOffset(20, 170)
 questLabel.BackgroundColor3 = Color3.fromRGB(35, 30, 24)
 questLabel.BackgroundTransparency = 0.15
 questLabel.BorderSizePixel = 0
@@ -69,21 +69,24 @@ local function updateStatsUi(data)
 	local gold = data.Gold or 0
 	local wood = data.Wood or 0
 	local stone = data.Stone or 0
+	local metal = data.Metal or 0
 	local houseLevel = data.HouseLevel or 1
 
 	print(string.format(
-		"[ClientMain] Received stats update: Gold=%d Wood=%d Stone=%d HouseLevel=%d",
+		"[ClientMain] Received stats update: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d",
 		gold,
 		wood,
 		stone,
+		metal,
 		houseLevel
 	))
 
 	statsLabel.Text = string.format(
-		"Золото: %d\nДерево: %d\nКамень: %d\nДом: уровень %d",
+		"Золото: %d\nДерево: %d\nКамень: %d\nМеталл: %d\nДом: уровень %d",
 		gold,
 		wood,
 		stone,
+		metal,
 		houseLevel
 	)
 end
