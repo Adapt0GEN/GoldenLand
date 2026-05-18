@@ -9,6 +9,21 @@ local PlayerDataService = {}
 local profiles = {}
 local PROFILE_STORE_NAME = "GoldenLandPlayerProfiles_v1"
 local profileStore = nil
+local DEFAULT_RESOURCE_ZONES = {
+	ForestArea_01 = {
+		State = "Active",
+		RemainingActions = 12,
+	},
+}
+
+local function createDefaultResourceZones()
+	return {
+		ForestArea_01 = {
+			State = DEFAULT_RESOURCE_ZONES.ForestArea_01.State,
+			RemainingActions = DEFAULT_RESOURCE_ZONES.ForestArea_01.RemainingActions,
+		},
+	}
+end
 
 local function getRemoteEvent(eventName)
 	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
@@ -42,9 +57,11 @@ local function createDefaultProfile(player)
 		StorageBuilt = false,
 		WorkshopBuilt = false,
 		ToolKitLevel = 0,
+		ForestUnlocked = false,
 		CurrentQuestId = nil,
 		CompletedQuests = {},
 		QuestProgress = {},
+		ResourceZones = createDefaultResourceZones(),
 	}
 end
 
@@ -94,6 +111,40 @@ local function applyNumber(profile, savedProfile, fieldName)
 	end
 end
 
+local function normalizeResourceZones(savedResourceZones, savedResourceAreas)
+	local resourceZones = createDefaultResourceZones()
+	local savedForestZone = nil
+
+	if type(savedResourceZones) == "table" and type(savedResourceZones.ForestArea_01) == "table" then
+		savedForestZone = savedResourceZones.ForestArea_01
+	elseif type(savedResourceAreas) == "table" and type(savedResourceAreas.ForestArea_01) == "table" then
+		savedForestZone = savedResourceAreas.ForestArea_01
+	end
+
+	if not savedForestZone then
+		return resourceZones
+	end
+
+	local forestZone = resourceZones.ForestArea_01
+
+	if type(savedForestZone.RemainingActions) == "number" then
+		forestZone.RemainingActions = math.clamp(savedForestZone.RemainingActions, 0, DEFAULT_RESOURCE_ZONES.ForestArea_01.RemainingActions)
+	elseif type(savedForestZone.Durability) == "number" then
+		forestZone.RemainingActions = if savedForestZone.Durability <= 0 then 0 else DEFAULT_RESOURCE_ZONES.ForestArea_01.RemainingActions
+	end
+
+	if type(savedForestZone.State) == "string" and savedForestZone.State == "Empty" then
+		forestZone.State = "Empty"
+		forestZone.RemainingActions = 0
+	elseif forestZone.RemainingActions <= 0 then
+		forestZone.State = "Empty"
+	else
+		forestZone.State = "Active"
+	end
+
+	return resourceZones
+end
+
 local function normalizeLoadedProfile(player, savedProfile)
 	local profile = createDefaultProfile(player)
 
@@ -121,6 +172,10 @@ local function normalizeLoadedProfile(player, savedProfile)
 		profile.WorkshopBuilt = savedProfile.WorkshopBuilt
 	end
 
+	if type(savedProfile.ForestUnlocked) == "boolean" then
+		profile.ForestUnlocked = savedProfile.ForestUnlocked
+	end
+
 	if type(savedProfile.CurrentQuestId) == "string" or savedProfile.CurrentQuestId == nil then
 		profile.CurrentQuestId = savedProfile.CurrentQuestId
 	end
@@ -132,6 +187,8 @@ local function normalizeLoadedProfile(player, savedProfile)
 	if type(savedProfile.QuestProgress) == "table" then
 		profile.QuestProgress = copyTable(savedProfile.QuestProgress)
 	end
+
+	profile.ResourceZones = normalizeResourceZones(savedProfile.ResourceZones, savedProfile.ResourceAreas)
 
 	return profile
 end
@@ -148,9 +205,11 @@ local function createSaveData(profile)
 		StorageBuilt = profile.StorageBuilt,
 		WorkshopBuilt = profile.WorkshopBuilt,
 		ToolKitLevel = profile.ToolKitLevel,
+		ForestUnlocked = profile.ForestUnlocked,
 		CurrentQuestId = profile.CurrentQuestId,
 		CompletedQuests = copyTable(profile.CompletedQuests),
 		QuestProgress = copyTable(profile.QuestProgress),
+		ResourceZones = copyTable(profile.ResourceZones),
 	}
 end
 
@@ -229,6 +288,8 @@ function PlayerDataService.GetPublicProfile(player)
 		StorageBuilt = profile.StorageBuilt,
 		WorkshopBuilt = profile.WorkshopBuilt,
 		ToolKitLevel = profile.ToolKitLevel,
+		ForestUnlocked = profile.ForestUnlocked,
+		ResourceZones = copyTable(profile.ResourceZones),
 	}
 end
 

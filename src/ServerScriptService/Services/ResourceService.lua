@@ -2,6 +2,7 @@
 -- Создаёт простые деревья, камни, металлическую руду и золотую жилу, которые можно собирать повторяемо.
 
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 
 local PlayerDataService = require(script.Parent.PlayerDataService)
 local QuestService = require(script.Parent.QuestService)
@@ -16,6 +17,11 @@ local TREE_RESPAWN_SECONDS = 10
 local STONE_RESPAWN_SECONDS = 10
 local METAL_RESPAWN_SECONDS = 10
 local GOLD_COOLDOWN_SECONDS = 2
+local FOREST_STONE_RESPAWN_SECONDS = 20
+local FOREST_ZONE_RESOURCES_FOLDER_NAME = "ForestZoneResources"
+local FOREST_AREA_ID = "ForestArea_01"
+local FOREST_AREA_DEFAULT_REMAINING_ACTIONS = 12
+local FOREST_AREA_DEBOUNCE_SECONDS = 0.6
 
 local TREE_POSITIONS = {
 	Vector3.new(20, 2, 8),
@@ -36,7 +42,12 @@ local METAL_POSITIONS = {
 }
 
 local GOLD_NODE_POSITION = Vector3.new(36, 1.4, 18)
+local FOREST_STONE_POSITIONS = {
+	Vector3.new(-45, 1.1, 12),
+	Vector3.new(-33, 1.1, -2),
+}
 local goldMineCooldownsByUserId = {}
+local forestAreaHarvestCooldownsByUserId = {}
 
 local function createPart(name, size, position, color, parent)
 	local part = Instance.new("Part")
@@ -97,6 +108,30 @@ local function respawnStoneAfterDelay(stoneModel, prompt)
 
 		setStoneAvailable(stoneModel, prompt, true)
 		print("[ResourceService] Stone respawned")
+	end)
+end
+
+local function setForestResourceAvailable(resourceModel, prompt, isAvailable)
+	for _, descendant in ipairs(resourceModel:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			descendant.Transparency = if isAvailable then 0 else 1
+			descendant.CanCollide = isAvailable
+			descendant.CanTouch = isAvailable
+			descendant.CanQuery = isAvailable
+		end
+	end
+
+	prompt.Enabled = isAvailable
+end
+
+local function respawnForestStoneAfterDelay(stoneModel, prompt)
+	task.delay(FOREST_STONE_RESPAWN_SECONDS, function()
+		if not stoneModel.Parent then
+			return
+		end
+
+		setForestResourceAvailable(stoneModel, prompt, true)
+		print("[ResourceService] Forest stone respawned")
 	end)
 end
 
@@ -223,6 +258,67 @@ local function mineGold(player)
 
 	CurrencyService.AddGold(player, 1)
 	print(string.format("[ResourceService] %s mined gold", player.Name))
+end
+
+local function canUseForestResources(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		warn(string.format("[ResourceService] Profile for %s was not found. Forest resource was not collected.", player.Name))
+		return false
+	end
+
+	return profile.ForestUnlocked == true
+end
+
+local function ensureForestAreaZone(profile)
+	profile.ResourceZones = profile.ResourceZones or {}
+
+	if type(profile.ResourceZones[FOREST_AREA_ID]) ~= "table" then
+		profile.ResourceZones[FOREST_AREA_ID] = {
+			State = "Active",
+			RemainingActions = FOREST_AREA_DEFAULT_REMAINING_ACTIONS,
+		}
+	end
+
+	local forestZone = profile.ResourceZones[FOREST_AREA_ID]
+	forestZone.RemainingActions = math.clamp(forestZone.RemainingActions or FOREST_AREA_DEFAULT_REMAINING_ACTIONS, 0, FOREST_AREA_DEFAULT_REMAINING_ACTIONS)
+
+	if forestZone.RemainingActions <= 0 or forestZone.State == "Empty" then
+		forestZone.State = "Empty"
+		forestZone.RemainingActions = 0
+	else
+		forestZone.State = "Active"
+	end
+
+	return forestZone
+end
+
+local function canHarvestForestArea(player)
+	local now = os.clock()
+	local lastHarvestAt = forestAreaHarvestCooldownsByUserId[player.UserId]
+
+	if lastHarvestAt and now - lastHarvestAt < FOREST_AREA_DEBOUNCE_SECONDS then
+		return false
+	end
+
+	forestAreaHarvestCooldownsByUserId[player.UserId] = now
+	return true
+end
+
+local function mineForestStone(player, stoneModel, prompt)
+	if not canUseForestResources(player) then
+		return
+	end
+
+	if not prompt.Enabled then
+		return
+	end
+
+	setForestResourceAvailable(stoneModel, prompt, false)
+	CurrencyService.AddStone(player, 2)
+	print(string.format("[ResourceService] %s mined forest stone +2", player.Name))
+	respawnForestStoneAfterDelay(stoneModel, prompt)
 end
 
 local function createTree(index, position, parent)
@@ -365,6 +461,39 @@ local function createGoldNode(parent)
 	return goldNode
 end
 
+local function createForestStone(index, position, parent)
+	local stoneModel = Instance.new("Model")
+	stoneModel.Name = string.format("ForestStone_%d", index)
+	stoneModel.Parent = parent
+
+	local stone = createPart(
+		"Stone",
+		Vector3.new(4, 2.2, 3.2),
+		position,
+		Color3.fromRGB(105, 115, 110),
+		stoneModel
+	)
+	stone.Shape = Enum.PartType.Ball
+	stone.Material = Enum.Material.Slate
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "MineForestStonePrompt"
+	prompt.ObjectText = "Лесной камень"
+	prompt.ActionText = "Добыть камень"
+	prompt.HoldDuration = 0.6
+	prompt.MaxActivationDistance = 10
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = stone
+
+	prompt.Triggered:Connect(function(player)
+		mineForestStone(player, stoneModel, prompt)
+	end)
+
+	stoneModel.PrimaryPart = stone
+
+	return stoneModel
+end
+
 function ResourceService.CreateResourceNodes()
 	local resourceNodes = Workspace:FindFirstChild(RESOURCE_FOLDER_NAME)
 
@@ -404,6 +533,146 @@ function ResourceService.CreateResourceNodes()
 
 	print("[ResourceService] Resource nodes are ready: 3 trees, 3 stones, 3 metal nodes and 1 gold node.")
 	return resourceNodes
+end
+
+function ResourceService.CreateForestZoneResources(forestZone, forestUnlocked)
+	if forestUnlocked ~= true then
+		return nil
+	end
+
+	if not forestZone then
+		warn("[ResourceService] ForestZone was not found. Forest resources were not created.")
+		return nil
+	end
+
+	local forestResources = forestZone:FindFirstChild(FOREST_ZONE_RESOURCES_FOLDER_NAME)
+
+	if not forestResources then
+		forestResources = Instance.new("Folder")
+		forestResources.Name = FOREST_ZONE_RESOURCES_FOLDER_NAME
+		forestResources.Parent = forestZone
+	end
+
+	for _, oldForestTree in ipairs(forestResources:GetChildren()) do
+		if string.match(oldForestTree.Name, "^ForestTree_%d+$") then
+			oldForestTree:Destroy()
+		end
+	end
+
+	if not forestResources:FindFirstChild(FOREST_AREA_ID) then
+		warn("[ResourceService] ForestArea_01 visual was not found. Forest area harvesting prompt may be unavailable.")
+	end
+
+	for index, position in ipairs(FOREST_STONE_POSITIONS) do
+		local stoneName = string.format("ForestStone_%d", index)
+
+		if not forestResources:FindFirstChild(stoneName) then
+			createForestStone(index, position, forestResources)
+		end
+	end
+
+	print("[ResourceService] Created ForestZone resources")
+	return forestResources
+end
+
+function ResourceService.HarvestForestArea(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		warn(string.format("[ResourceService] Profile for %s was not found. ForestArea_01 was not harvested.", player.Name))
+		return false
+	end
+
+	if profile.ForestUnlocked ~= true then
+		warn(string.format("[ResourceService] %s cannot harvest ForestArea_01: forest is locked.", player.Name))
+		return false
+	end
+
+	if not canHarvestForestArea(player) then
+		return false
+	end
+
+	local forestZone = ensureForestAreaZone(profile)
+
+	if forestZone.State == "Empty" or forestZone.RemainingActions <= 0 then
+		forestZone.State = "Empty"
+		forestZone.RemainingActions = 0
+		print("[ResourceService] ForestArea_01 is now Empty")
+
+		local WorldService = require(script.Parent.WorldService)
+		WorldService.UpdateForestAreaVisual(player)
+		return false
+	end
+
+	CurrencyService.AddWood(player, 1)
+	forestZone.RemainingActions = math.max(forestZone.RemainingActions - 1, 0)
+
+	print(string.format("[ResourceService] %s gathered ForestArea_01", player.Name))
+	print(string.format("[ResourceService] ForestArea_01 remaining actions: %d", forestZone.RemainingActions))
+
+	if forestZone.RemainingActions <= 0 then
+		forestZone.State = "Empty"
+		print("[ResourceService] ForestArea_01 is now Empty")
+	else
+		forestZone.State = "Active"
+	end
+
+	local WorldService = require(script.Parent.WorldService)
+	WorldService.UpdateForestAreaVisual(player)
+
+	if PlayerDataService.SendProfileUpdate then
+		PlayerDataService.SendProfileUpdate(player)
+	end
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player)
+	end
+
+	return true
+end
+
+function ResourceService.ResetResourceZoneForDebug(player, resourceZoneId)
+	if not RunService:IsStudio() then
+		return false
+	end
+
+	if resourceZoneId ~= FOREST_AREA_ID then
+		warn(string.format("[ResourceService] DEBUG reset rejected for unknown resource zone: %s", tostring(resourceZoneId)))
+		return false
+	end
+
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		warn(string.format("[ResourceService] Profile for %s was not found. Debug reset was not applied.", player.Name))
+		return false
+	end
+
+	profile.ResourceZones = profile.ResourceZones or {}
+	profile.ResourceZones[FOREST_AREA_ID] = {
+		State = "Active",
+		RemainingActions = FOREST_AREA_DEFAULT_REMAINING_ACTIONS,
+	}
+	forestAreaHarvestCooldownsByUserId[player.UserId] = nil
+
+	local WorldService = require(script.Parent.WorldService)
+	WorldService.UpdateForestAreaVisual(player)
+
+	if PlayerDataService.SendProfileUpdate then
+		PlayerDataService.SendProfileUpdate(player)
+	end
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player)
+	end
+
+	print(string.format(
+		"[ResourceService] DEBUG reset ForestArea_01 for %s: Active, RemainingActions=%d",
+		player.Name,
+		FOREST_AREA_DEFAULT_REMAINING_ACTIONS
+	))
+
+	return true
 end
 
 return ResourceService

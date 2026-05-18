@@ -45,10 +45,12 @@ local function onPlayerAdded(player)
 	local profile = PlayerDataService.CreateProfile(player)
 	print(string.format("[ServerMain] Data for %s is ready.", player.Name))
 	PlayerDataService.SendProfileUpdate(player)
+	WorldService.UpdateForestAccessForPlayer(player)
 
 	task.delay(1, function()
 		if PlayerDataService.GetProfile(player) then
 			PlayerDataService.SendProfileUpdate(player)
+			WorldService.UpdateForestAccessForPlayer(player)
 		end
 	end)
 
