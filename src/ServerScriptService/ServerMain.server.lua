@@ -72,10 +72,7 @@ end
 
 local function saveAllProfiles()
 	print("[ServerMain] Server is closing. Saving player profiles...")
-
-	for _, player in Players:GetPlayers() do
-		PlayerDataService.SaveProfile(player, { Force = true })
-	end
+	PlayerDataService.SaveAllProfiles({ Force = true, Wait = true })
 end
 
 Players.PlayerAdded:Connect(onPlayerAdded)

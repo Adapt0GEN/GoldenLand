@@ -20,11 +20,23 @@ local FOREST_ZONE_POSITION = Vector3.new(-38, 0.05, 8)
 local FOREST_AREA_POSITION = FOREST_ZONE_POSITION + Vector3.new(0, 0, 2)
 local FOREST_AREA_STAGE_NAMES = {
 	"Active",
+	"Full",
+	"Medium",
+	"Low",
+	"TreeEmpty",
 	"Empty",
 }
-local FOREST_AREA_STAGE_LOOKUP = {
-	Active = true,
-	Empty = true,
+local FOREST_AREA_TREE_POSITIONS = {
+	FOREST_AREA_POSITION + Vector3.new(-8, 0.2, -5),
+	FOREST_AREA_POSITION + Vector3.new(-4, 0.2, 4),
+	FOREST_AREA_POSITION + Vector3.new(0, 0.2, -3),
+	FOREST_AREA_POSITION + Vector3.new(4, 0.2, 5),
+	FOREST_AREA_POSITION + Vector3.new(8, 0.2, -4),
+	FOREST_AREA_POSITION + Vector3.new(10, 0.2, 3),
+}
+local FOREST_STONE_OBJECT_IDS = {
+	"ForestStone_01",
+	"ForestStone_02",
 }
 
 local function createPart(name, size, position, color, parent)
@@ -225,6 +237,21 @@ local function setModelVisible(model, isVisible)
 			descendant.CanQuery = isVisible
 		elseif descendant:IsA("SurfaceGui") then
 			descendant.Enabled = isVisible
+		elseif descendant:IsA("ProximityPrompt") then
+			descendant.Enabled = isVisible
+		end
+	end
+end
+
+local function setForestResourceModelAvailable(model, isAvailable)
+	for _, descendant in ipairs(model:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			descendant.Transparency = if isAvailable then 0 else 1
+			descendant.CanCollide = isAvailable
+			descendant.CanTouch = isAvailable
+			descendant.CanQuery = isAvailable
+		elseif descendant:IsA("ProximityPrompt") then
+			descendant.Enabled = isAvailable
 		end
 	end
 end
@@ -272,16 +299,32 @@ local function ensureForestZoneResourcesFolder(forestZone)
 	return forestResources
 end
 
-local function createForestAreaStage(parent, stageName)
-	local stage = parent:FindFirstChild(string.format("%s_%s", FOREST_AREA_ID, stageName))
-
-	if stage then
-		return stage
-	end
-
-	stage = Instance.new("Model")
+local function createForestAreaStage(parent, stageName, treeCount)
+	local stage = Instance.new("Model")
 	stage.Name = string.format("%s_%s", FOREST_AREA_ID, stageName)
 	stage.Parent = parent
+
+	if type(treeCount) == "number" then
+		for index = 1, treeCount do
+			createDecorativeTree(string.format("Tree_%d", index), FOREST_AREA_TREE_POSITIONS[index], stage)
+		end
+
+		if stageName == "Low" or stageName == "TreeEmpty" or stageName == "Empty" then
+			createStump("Stump_1", FOREST_AREA_POSITION + Vector3.new(-8, 0, -5), stage)
+			createStump("Stump_2", FOREST_AREA_POSITION + Vector3.new(-4, 0, 4), stage)
+		end
+
+		if stageName == "TreeEmpty" or stageName == "Empty" then
+			createLog("FallenLog_1", FOREST_AREA_POSITION + Vector3.new(-2, 0, 4), stage)
+			createLog("FallenLog_2", FOREST_AREA_POSITION + Vector3.new(6, 0, -1), stage)
+		end
+
+		if stageName == "Empty" then
+			createTextSign("EmptyForestSign", "Р›РµСЃ РІС‹СЂСѓР±Р»РµРЅ", FOREST_AREA_POSITION + Vector3.new(0, 2.5, 5), stage)
+		end
+
+		return stage
+	end
 
 	if stageName == "Active" then
 		createDecorativeTree("Tree_1", FOREST_AREA_POSITION + Vector3.new(-8, 0.2, -5), stage)
@@ -304,7 +347,7 @@ local function createForestAreaStage(parent, stageName)
 	return stage
 end
 
-local function createForestAreaVisual(forestResources)
+local function createForestAreaVisual(forestResources, visualStage, treeCount)
 	local forestArea = forestResources:FindFirstChild(FOREST_AREA_ID)
 
 	if not forestArea then
@@ -314,8 +357,14 @@ local function createForestAreaVisual(forestResources)
 	end
 
 	for _, stageName in ipairs(FOREST_AREA_STAGE_NAMES) do
-		createForestAreaStage(forestArea, stageName)
+		local existingStage = forestArea:FindFirstChild(string.format("%s_%s", FOREST_AREA_ID, stageName))
+
+		if existingStage then
+			existingStage:Destroy()
+		end
 	end
+
+	createForestAreaStage(forestArea, visualStage or "Full", treeCount or 6)
 
 	local promptPart = forestArea:FindFirstChild("GatherForestAreaPromptPart")
 
@@ -583,6 +632,42 @@ function WorldService.UpdateForestAccessForPlayer(player)
 	return true
 end
 
+local function getForestAreaVisualStage(forestAreaData)
+	local objects = forestAreaData.Objects or {}
+	local treeCluster = objects.ForestTreeCluster or {}
+	local treeRemainingActions = treeCluster.RemainingActions or forestAreaData.RemainingActions or 0
+
+	if forestAreaData.State == "Empty" then
+		return "Empty", 0
+	elseif treeRemainingActions >= 9 then
+		return "Full", 6
+	elseif treeRemainingActions >= 5 then
+		return "Medium", 4
+	elseif treeRemainingActions >= 1 then
+		return "Low", 2
+	end
+
+	return "TreeEmpty", 0
+end
+
+local function updateForestStoneVisuals(forestResources, forestAreaData)
+	local objects = forestAreaData.Objects or {}
+	local locationIsActive = forestAreaData.State ~= "Empty"
+
+	for _, objectId in ipairs(FOREST_STONE_OBJECT_IDS) do
+		local stoneModel = forestResources:FindFirstChild(objectId)
+		local stoneObject = objects[objectId]
+		local isAvailable = locationIsActive
+			and type(stoneObject) == "table"
+			and stoneObject.State == "Active"
+			and (stoneObject.RemainingActions or 0) > 0
+
+		if stoneModel then
+			setForestResourceModelAvailable(stoneModel, isAvailable)
+		end
+	end
+end
+
 function WorldService.UpdateForestAreaVisual(player)
 	local profile = PlayerDataService.GetProfile(player)
 
@@ -599,42 +684,23 @@ function WorldService.UpdateForestAreaVisual(player)
 	end
 
 	local forestResources = ensureForestZoneResourcesFolder(forestZone)
-	local forestArea = createForestAreaVisual(forestResources)
 	local resourceZones = profile.ResourceZones or {}
 	local forestAreaData = resourceZones[FOREST_AREA_ID] or {}
-	local state = forestAreaData.State or "Active"
-
-	if not FOREST_AREA_STAGE_LOOKUP[state] then
-		state = "Active"
-	end
-
-	for _, child in ipairs(forestArea:GetChildren()) do
-		if child:IsA("Model") and string.match(child.Name, "^" .. FOREST_AREA_ID .. "_") then
-			local expectedStageName = string.format("%s_%s", FOREST_AREA_ID, state)
-			setModelVisible(child, child.Name == expectedStageName)
-		end
-	end
+	local visualStage, treeCount = getForestAreaVisualStage(forestAreaData)
+	local forestArea = createForestAreaVisual(forestResources, visualStage, treeCount)
+	local objects = forestAreaData.Objects or {}
+	local treeCluster = objects.ForestTreeCluster or {}
 
 	local prompt = forestArea:FindFirstChild("GatherForestAreaPrompt", true)
 
 	if prompt then
-		prompt.Enabled = state == "Active" and (forestAreaData.RemainingActions or 12) > 0
+		prompt.Enabled = forestAreaData.State == "Active"
+			and treeCluster.State == "Active"
+			and (treeCluster.RemainingActions or 0) > 0
 	end
 
-	print(string.format("[WorldService] Updated ForestArea_01 visual state: %s", state))
-
-	if state == "Active" then
-		local activeStage = forestArea:FindFirstChild(string.format("%s_Active", FOREST_AREA_ID))
-		local treeCount, rockCount = 0, 0
-
-		if activeStage then
-			treeCount, rockCount = countVisibleActiveForestParts(activeStage)
-		end
-
-		print(string.format("[WorldService] ForestArea_01 active visual created: %d trees, %d rocks", treeCount, rockCount))
-	elseif state == "Empty" and not hasVisibleGreenTree(forestArea) then
-		print("[WorldService] ForestArea_01 empty visual has no active trees")
-	end
+	updateForestStoneVisuals(forestResources, forestAreaData)
+	print(string.format("[WorldService] ForestArea_01 visual stage: %s, trees=%d", visualStage, treeCount))
 
 	return true
 end

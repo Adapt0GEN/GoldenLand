@@ -17,12 +17,16 @@ local TREE_RESPAWN_SECONDS = 10
 local STONE_RESPAWN_SECONDS = 10
 local METAL_RESPAWN_SECONDS = 10
 local GOLD_COOLDOWN_SECONDS = 2
-local FOREST_STONE_RESPAWN_SECONDS = 20
 local FOREST_ZONE_RESOURCES_FOLDER_NAME = "ForestZoneResources"
 local FOREST_AREA_ID = "ForestArea_01"
 local FOREST_AREA_DEFAULT_REMAINING_ACTIONS = 12
 local FOREST_AREA_DEBOUNCE_SECONDS = 0.6
 local FOREST_AREA_DEBUG_RESET_DEBOUNCE_SECONDS = 1
+local FOREST_TREE_CLUSTER_ID = "ForestTreeCluster"
+local FOREST_STONE_OBJECT_IDS = {
+	"ForestStone_01",
+	"ForestStone_02",
+}
 
 local TREE_POSITIONS = {
 	Vector3.new(20, 2, 8),
@@ -124,17 +128,6 @@ local function setForestResourceAvailable(resourceModel, prompt, isAvailable)
 	end
 
 	prompt.Enabled = isAvailable
-end
-
-local function respawnForestStoneAfterDelay(stoneModel, prompt)
-	task.delay(FOREST_STONE_RESPAWN_SECONDS, function()
-		if not stoneModel.Parent then
-			return
-		end
-
-		setForestResourceAvailable(stoneModel, prompt, true)
-		print("[ResourceService] Forest stone respawned")
-	end)
 end
 
 local function setMetalAvailable(metalModel, prompt, isAvailable)
@@ -273,27 +266,121 @@ local function canUseForestResources(player)
 	return profile.ForestUnlocked == true
 end
 
+local function createDefaultForestAreaZone()
+	return {
+		Type = "ForestArea",
+		State = "Active",
+		RemainingActions = FOREST_AREA_DEFAULT_REMAINING_ACTIONS,
+		Objects = {
+			ForestTreeCluster = {
+				Type = "TreeCluster",
+				State = "Active",
+				Resource = "Wood",
+				RemainingActions = FOREST_AREA_DEFAULT_REMAINING_ACTIONS,
+				AmountPerAction = 1,
+			},
+			ForestStone_01 = {
+				Type = "StoneNode",
+				State = "Active",
+				Resource = "Stone",
+				RemainingActions = 1,
+				AmountPerAction = 2,
+			},
+			ForestStone_02 = {
+				Type = "StoneNode",
+				State = "Active",
+				Resource = "Stone",
+				RemainingActions = 1,
+				AmountPerAction = 2,
+			},
+		},
+	}
+end
+
+local function ensureForestObject(forestZone, objectId, defaultObject, maxRemainingActions)
+	forestZone.Objects[objectId] = forestZone.Objects[objectId] or {}
+
+	local resourceObject = forestZone.Objects[objectId]
+	resourceObject.Type = resourceObject.Type or defaultObject.Type
+	resourceObject.State = resourceObject.State or defaultObject.State
+	resourceObject.Resource = resourceObject.Resource or defaultObject.Resource
+	resourceObject.AmountPerAction = resourceObject.AmountPerAction or defaultObject.AmountPerAction
+	resourceObject.RemainingActions = math.clamp(
+		resourceObject.RemainingActions or defaultObject.RemainingActions,
+		0,
+		maxRemainingActions
+	)
+	resourceObject.State = if resourceObject.State == "Empty" or resourceObject.RemainingActions <= 0 then "Empty" else "Active"
+
+	return resourceObject
+end
+
+local function isForestObjectActive(resourceObject)
+	return type(resourceObject) == "table"
+		and resourceObject.State ~= "Empty"
+		and (resourceObject.RemainingActions or 0) > 0
+end
+
 local function ensureForestAreaZone(profile)
 	profile.ResourceZones = profile.ResourceZones or {}
 
 	if type(profile.ResourceZones[FOREST_AREA_ID]) ~= "table" then
-		profile.ResourceZones[FOREST_AREA_ID] = {
-			State = "Active",
-			RemainingActions = FOREST_AREA_DEFAULT_REMAINING_ACTIONS,
-		}
+		profile.ResourceZones[FOREST_AREA_ID] = createDefaultForestAreaZone()
 	end
 
 	local forestZone = profile.ResourceZones[FOREST_AREA_ID]
-	forestZone.RemainingActions = math.clamp(forestZone.RemainingActions or FOREST_AREA_DEFAULT_REMAINING_ACTIONS, 0, FOREST_AREA_DEFAULT_REMAINING_ACTIONS)
+	local defaults = createDefaultForestAreaZone()
+	forestZone.Type = forestZone.Type or "ForestArea"
+	forestZone.Objects = forestZone.Objects or {}
 
-	if forestZone.RemainingActions <= 0 or forestZone.State == "Empty" then
-		forestZone.State = "Empty"
-		forestZone.RemainingActions = 0
-	else
-		forestZone.State = "Active"
+	local treeCluster = ensureForestObject(
+		forestZone,
+		FOREST_TREE_CLUSTER_ID,
+		defaults.Objects.ForestTreeCluster,
+		FOREST_AREA_DEFAULT_REMAINING_ACTIONS
+	)
+
+	if type(forestZone.RemainingActions) == "number"
+		and (forestZone.Objects.ForestTreeCluster.RemainingActions == nil or forestZone.Objects.ForestTreeCluster.RemainingActions == defaults.Objects.ForestTreeCluster.RemainingActions)
+	then
+		treeCluster.RemainingActions = math.clamp(forestZone.RemainingActions, 0, FOREST_AREA_DEFAULT_REMAINING_ACTIONS)
+		treeCluster.State = if treeCluster.RemainingActions <= 0 then "Empty" else "Active"
 	end
 
+	ensureForestObject(forestZone, "ForestStone_01", defaults.Objects.ForestStone_01, 1)
+	ensureForestObject(forestZone, "ForestStone_02", defaults.Objects.ForestStone_02, 1)
+	forestZone.RemainingActions = treeCluster.RemainingActions
+
 	return forestZone
+end
+
+local function updateForestAreaLocationState(player, profile)
+	profile = profile or PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return nil
+	end
+
+	local forestZone = ensureForestAreaZone(profile)
+	local previousState = forestZone.State
+	local hasActiveObject = false
+
+	for _, resourceObject in pairs(forestZone.Objects) do
+		if isForestObjectActive(resourceObject) then
+			hasActiveObject = true
+			break
+		end
+	end
+
+	forestZone.State = if hasActiveObject then "Active" else "Empty"
+	forestZone.RemainingActions = forestZone.Objects.ForestTreeCluster.RemainingActions or 0
+
+	if forestZone.State ~= previousState then
+		PlayerDataService.MarkDirty(player)
+	end
+
+	print(string.format("[ResourceService] ForestArea_01 state after update: %s", forestZone.State))
+	return forestZone.State
 end
 
 local function canHarvestForestArea(player)
@@ -329,10 +416,52 @@ local function mineForestStone(player, stoneModel, prompt)
 		return
 	end
 
-	setForestResourceAvailable(stoneModel, prompt, false)
-	CurrencyService.AddStone(player, 2)
-	print(string.format("[ResourceService] %s mined forest stone +2", player.Name))
-	respawnForestStoneAfterDelay(stoneModel, prompt)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		warn(string.format("[ResourceService] Profile for %s was not found. Forest stone was not mined.", player.Name))
+		return
+	end
+
+	local forestZone = ensureForestAreaZone(profile)
+	updateForestAreaLocationState(player, profile)
+	local objectId = stoneModel:GetAttribute("ForestObjectId") or stoneModel.Name
+	local stoneObject = forestZone.Objects[objectId]
+
+	if forestZone.State == "Empty" then
+		setForestResourceAvailable(stoneModel, prompt, false)
+		print(string.format("[ResourceService] ForestArea_01 is Empty; forest stone blocked for %s", player.Name))
+		return
+	end
+
+	if type(stoneObject) ~= "table" or stoneObject.State == "Empty" or (stoneObject.RemainingActions or 0) <= 0 then
+		setForestResourceAvailable(stoneModel, prompt, false)
+		updateForestAreaLocationState(player, profile)
+
+		local WorldService = require(script.Parent.WorldService)
+		WorldService.UpdateForestAreaVisual(player)
+		return
+	end
+
+	CurrencyService.AddStone(player, stoneObject.AmountPerAction or 2)
+	stoneObject.RemainingActions = math.max((stoneObject.RemainingActions or 1) - 1, 0)
+
+	print(string.format("[ResourceService] %s mined %s in ForestArea_01", player.Name, objectId))
+
+	if stoneObject.RemainingActions <= 0 then
+		stoneObject.RemainingActions = 0
+		stoneObject.State = "Empty"
+		setForestResourceAvailable(stoneModel, prompt, false)
+		print(string.format("[ResourceService] %s is now Empty", objectId))
+	else
+		stoneObject.State = "Active"
+	end
+
+	PlayerDataService.MarkDirty(player)
+	updateForestAreaLocationState(player, profile)
+
+	local WorldService = require(script.Parent.WorldService)
+	WorldService.UpdateForestAreaVisual(player)
 end
 
 local function createTree(index, position, parent)
@@ -477,7 +606,9 @@ end
 
 local function createForestStone(index, position, parent)
 	local stoneModel = Instance.new("Model")
-	stoneModel.Name = string.format("ForestStone_%d", index)
+	local objectId = FOREST_STONE_OBJECT_IDS[index]
+	stoneModel.Name = objectId
+	stoneModel:SetAttribute("ForestObjectId", objectId)
 	stoneModel.Parent = parent
 
 	local stone = createPart(
@@ -570,6 +701,8 @@ function ResourceService.CreateForestZoneResources(forestZone, forestUnlocked)
 	for _, oldForestTree in ipairs(forestResources:GetChildren()) do
 		if string.match(oldForestTree.Name, "^ForestTree_%d+$") then
 			oldForestTree:Destroy()
+		elseif string.match(oldForestTree.Name, "^ForestStone_%d$") then
+			oldForestTree:Destroy()
 		end
 	end
 
@@ -578,7 +711,7 @@ function ResourceService.CreateForestZoneResources(forestZone, forestUnlocked)
 	end
 
 	for index, position in ipairs(FOREST_STONE_POSITIONS) do
-		local stoneName = string.format("ForestStone_%d", index)
+		local stoneName = FOREST_STONE_OBJECT_IDS[index]
 
 		if not forestResources:FindFirstChild(stoneName) then
 			createForestStone(index, position, forestResources)
@@ -607,10 +740,10 @@ function ResourceService.HarvestForestArea(player)
 	end
 
 	local forestZone = ensureForestAreaZone(profile)
+	updateForestAreaLocationState(player, profile)
+	local treeCluster = forestZone.Objects.ForestTreeCluster
 
-	if forestZone.State == "Empty" or forestZone.RemainingActions <= 0 then
-		forestZone.State = "Empty"
-		forestZone.RemainingActions = 0
+	if forestZone.State == "Empty" then
 		print(string.format("[ResourceService] ForestArea_01 is Empty; gather blocked for %s", player.Name))
 
 		local WorldService = require(script.Parent.WorldService)
@@ -618,19 +751,36 @@ function ResourceService.HarvestForestArea(player)
 		return false
 	end
 
-	CurrencyService.AddWood(player, 1)
-	forestZone.RemainingActions = math.max(forestZone.RemainingActions - 1, 0)
-	PlayerDataService.MarkDirty(player)
+	if treeCluster.State == "Empty" or (treeCluster.RemainingActions or 0) <= 0 then
+		treeCluster.State = "Empty"
+		treeCluster.RemainingActions = 0
+		forestZone.RemainingActions = 0
+		PlayerDataService.MarkDirty(player)
+		updateForestAreaLocationState(player, profile)
 
-	print(string.format("[ResourceService] %s gathered ForestArea_01", player.Name))
-	print(string.format("[ResourceService] ForestArea_01 remaining actions: %d", forestZone.RemainingActions))
-
-	if forestZone.RemainingActions <= 0 then
-		forestZone.State = "Empty"
-		print("[ResourceService] ForestArea_01 is now Empty")
-	else
-		forestZone.State = "Active"
+		local WorldService = require(script.Parent.WorldService)
+		WorldService.UpdateForestAreaVisual(player)
+		return false
 	end
+
+	CurrencyService.AddWood(player, treeCluster.AmountPerAction or 1)
+	treeCluster.RemainingActions = math.max((treeCluster.RemainingActions or FOREST_AREA_DEFAULT_REMAINING_ACTIONS) - 1, 0)
+	forestZone.RemainingActions = treeCluster.RemainingActions
+
+	print(string.format("[ResourceService] %s gathered ForestTreeCluster in ForestArea_01", player.Name))
+	print(string.format("[ResourceService] ForestTreeCluster remaining actions: %d", treeCluster.RemainingActions))
+
+	if treeCluster.RemainingActions <= 0 then
+		treeCluster.RemainingActions = 0
+		treeCluster.State = "Empty"
+		forestZone.RemainingActions = 0
+		print("[ResourceService] ForestTreeCluster is now Empty")
+	else
+		treeCluster.State = "Active"
+	end
+
+	PlayerDataService.MarkDirty(player)
+	updateForestAreaLocationState(player, profile)
 
 	local WorldService = require(script.Parent.WorldService)
 	WorldService.UpdateForestAreaVisual(player)
@@ -664,12 +814,11 @@ function ResourceService.ResetResourceZoneForDebug(player, resourceZoneId)
 	end
 
 	profile.ResourceZones = profile.ResourceZones or {}
-	profile.ResourceZones[FOREST_AREA_ID] = {
-		State = "Active",
-		RemainingActions = FOREST_AREA_DEFAULT_REMAINING_ACTIONS,
-	}
+	profile.ResourceZones[FOREST_AREA_ID] = createDefaultForestAreaZone()
 	PlayerDataService.MarkDirty(player)
 	forestAreaHarvestCooldownsByUserId[player.UserId] = nil
+
+	print(string.format("[ResourceService] DEBUG reset ForestArea_01 location for %s", player.Name))
 
 	local WorldService = require(script.Parent.WorldService)
 	WorldService.UpdateForestAreaVisual(player)
@@ -678,13 +827,11 @@ function ResourceService.ResetResourceZoneForDebug(player, resourceZoneId)
 		PlayerDataService.SendProfileUpdate(player)
 	end
 
-	print(string.format(
-		"[ResourceService] DEBUG reset ForestArea_01 for %s: Active, RemainingActions=%d",
-		player.Name,
-		FOREST_AREA_DEFAULT_REMAINING_ACTIONS
-	))
-
 	return true
+end
+
+function ResourceService.UpdateForestAreaLocationState(player)
+	return updateForestAreaLocationState(player)
 end
 
 return ResourceService

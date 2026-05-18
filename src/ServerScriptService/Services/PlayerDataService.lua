@@ -2,6 +2,7 @@
 -- Загружает, хранит и сохраняет простые профили игроков.
 
 local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PlayerDataService = {}
@@ -13,16 +14,64 @@ local profileStore = nil
 local SAVE_THROTTLE_SECONDS = 10
 local DEFAULT_RESOURCE_ZONES = {
 	ForestArea_01 = {
+		Type = "ForestArea",
 		State = "Active",
 		RemainingActions = 12,
+		Objects = {
+			ForestTreeCluster = {
+				Type = "TreeCluster",
+				State = "Active",
+				Resource = "Wood",
+				RemainingActions = 12,
+				AmountPerAction = 1,
+			},
+			ForestStone_01 = {
+				Type = "StoneNode",
+				State = "Active",
+				Resource = "Stone",
+				RemainingActions = 1,
+				AmountPerAction = 2,
+			},
+			ForestStone_02 = {
+				Type = "StoneNode",
+				State = "Active",
+				Resource = "Stone",
+				RemainingActions = 1,
+				AmountPerAction = 2,
+			},
+		},
 	},
 }
 
 local function createDefaultResourceZones()
 	return {
 		ForestArea_01 = {
+			Type = DEFAULT_RESOURCE_ZONES.ForestArea_01.Type,
 			State = DEFAULT_RESOURCE_ZONES.ForestArea_01.State,
 			RemainingActions = DEFAULT_RESOURCE_ZONES.ForestArea_01.RemainingActions,
+			Objects = {
+				ForestTreeCluster = {
+					Type = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestTreeCluster.Type,
+					State = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestTreeCluster.State,
+					Resource = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestTreeCluster.Resource,
+					RemainingActions = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestTreeCluster.RemainingActions,
+					AmountPerAction = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestTreeCluster.AmountPerAction,
+				},
+				ForestStone_01 = {
+					Type = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_01.Type,
+					State = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_01.State,
+					Resource = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_01.Resource,
+					RemainingActions = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_01.RemainingActions,
+					AmountPerAction = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_01.AmountPerAction,
+				},
+				ForestStone_02 = {
+					Type = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_02.Type,
+					State = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_02.State,
+					Resource = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_02.Resource,
+					RemainingActions = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_02.RemainingActions,
+					AmountPerAction = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_02.AmountPerAction,
+				},
+			},
 		},
 	}
 end
@@ -73,21 +122,33 @@ local function getProfileKey(player)
 	return string.format("Player_%d", player.UserId)
 end
 
+local function getProfileKeyFromUserId(userId)
+	return string.format("Player_%d", userId)
+end
+
 local function getForestAreaLogValues(profile)
 	local forestZone = profile.ResourceZones and profile.ResourceZones.ForestArea_01
 
 	if type(forestZone) ~= "table" then
-		return "nil", 0
+		return "nil", 0, "nil", "nil"
 	end
 
-	return forestZone.State or "nil", forestZone.RemainingActions or 0
+	local objects = forestZone.Objects or {}
+	local treeCluster = objects.ForestTreeCluster or {}
+	local forestStone01 = objects.ForestStone_01 or {}
+	local forestStone02 = objects.ForestStone_02 or {}
+
+	return forestZone.State or "nil",
+		treeCluster.RemainingActions or forestZone.RemainingActions or 0,
+		forestStone01.State or "nil",
+		forestStone02.State or "nil"
 end
 
 local function logProfileValues(prefix, profile)
-	local forestState, forestRemainingActions = getForestAreaLogValues(profile)
+	local forestState, forestTreeRemainingActions, forestStone01State, forestStone02State = getForestAreaLogValues(profile)
 
 	print(string.format(
-		"[PlayerDataService] %s: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d ToolKitLevel=%d ForestUnlocked=%s ForestArea_01.State=%s RemainingActions=%d",
+		"[PlayerDataService] %s: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d ToolKitLevel=%d ForestUnlocked=%s ForestArea_01.State=%s ForestTreeCluster.RemainingActions=%d ForestStone_01.State=%s ForestStone_02.State=%s",
 		prefix,
 		profile.Gold or 0,
 		profile.Wood or 0,
@@ -97,7 +158,9 @@ local function logProfileValues(prefix, profile)
 		profile.ToolKitLevel or 0,
 		tostring(profile.ForestUnlocked == true),
 		forestState,
-		forestRemainingActions
+		forestTreeRemainingActions,
+		forestStone01State,
+		forestStone02State
 	))
 end
 
@@ -143,6 +206,27 @@ local function applyNumber(profile, savedProfile, fieldName)
 	end
 end
 
+local function isResourceObjectActive(resourceObject)
+	if type(resourceObject) ~= "table" then
+		return false
+	end
+
+	return resourceObject.State ~= "Empty" and (resourceObject.RemainingActions or 0) > 0
+end
+
+local function normalizeForestObject(resourceObject, defaultObject, maxRemainingActions)
+	resourceObject.Type = resourceObject.Type or defaultObject.Type
+	resourceObject.State = resourceObject.State or defaultObject.State
+	resourceObject.Resource = resourceObject.Resource or defaultObject.Resource
+	resourceObject.AmountPerAction = resourceObject.AmountPerAction or defaultObject.AmountPerAction
+	resourceObject.RemainingActions = math.clamp(
+		resourceObject.RemainingActions or defaultObject.RemainingActions,
+		0,
+		maxRemainingActions
+	)
+	resourceObject.State = if resourceObject.State == "Empty" or resourceObject.RemainingActions <= 0 then "Empty" else "Active"
+end
+
 local function normalizeResourceZones(savedResourceZones, savedResourceAreas)
 	local resourceZones = createDefaultResourceZones()
 	local savedForestZone = nil
@@ -158,6 +242,20 @@ local function normalizeResourceZones(savedResourceZones, savedResourceAreas)
 	end
 
 	local forestZone = resourceZones.ForestArea_01
+	forestZone.Type = "ForestArea"
+	forestZone.Objects = forestZone.Objects or {}
+
+	if type(savedForestZone.Objects) == "table" then
+		for objectId, savedObject in pairs(savedForestZone.Objects) do
+			if type(savedObject) == "table" then
+				forestZone.Objects[objectId] = forestZone.Objects[objectId] or {}
+
+				for key, value in pairs(savedObject) do
+					forestZone.Objects[objectId][key] = value
+				end
+			end
+		end
+	end
 
 	if type(savedForestZone.RemainingActions) == "number" then
 		forestZone.RemainingActions = math.clamp(savedForestZone.RemainingActions, 0, DEFAULT_RESOURCE_ZONES.ForestArea_01.RemainingActions)
@@ -165,14 +263,38 @@ local function normalizeResourceZones(savedResourceZones, savedResourceAreas)
 		forestZone.RemainingActions = if savedForestZone.Durability <= 0 then 0 else DEFAULT_RESOURCE_ZONES.ForestArea_01.RemainingActions
 	end
 
-	if type(savedForestZone.State) == "string" and savedForestZone.State == "Empty" then
-		forestZone.State = "Empty"
-		forestZone.RemainingActions = 0
-	elseif forestZone.RemainingActions <= 0 then
-		forestZone.State = "Empty"
-	else
-		forestZone.State = "Active"
+	local treeCluster = forestZone.Objects.ForestTreeCluster
+
+	if type(savedForestZone.Objects) ~= "table" or type(savedForestZone.Objects.ForestTreeCluster) ~= "table" then
+		treeCluster.RemainingActions = forestZone.RemainingActions
 	end
+
+	normalizeForestObject(
+		treeCluster,
+		DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestTreeCluster,
+		DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestTreeCluster.RemainingActions
+	)
+	normalizeForestObject(
+		forestZone.Objects.ForestStone_01,
+		DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_01,
+		DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_01.RemainingActions
+	)
+	normalizeForestObject(
+		forestZone.Objects.ForestStone_02,
+		DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_02,
+		DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_02.RemainingActions
+	)
+
+	if isResourceObjectActive(treeCluster)
+		or isResourceObjectActive(forestZone.Objects.ForestStone_01)
+		or isResourceObjectActive(forestZone.Objects.ForestStone_02)
+	then
+		forestZone.State = "Active"
+	else
+		forestZone.State = "Empty"
+	end
+
+	forestZone.RemainingActions = treeCluster.RemainingActions
 
 	return resourceZones
 end
@@ -318,6 +440,7 @@ function PlayerDataService.MarkDirty(player)
 	end
 
 	profile._Dirty = true
+	profile._DirtyRevision = (profile._DirtyRevision or 0) + 1
 	return true
 end
 
@@ -363,78 +486,134 @@ function PlayerDataService.SendProfileUpdate(player)
 	return true
 end
 
-function PlayerDataService.SaveProfile(player, options)
+local function saveProfileData(userId, playerName, profile, playerForUpdate, options)
 	options = options or {}
 
-	local profile = PlayerDataService.GetProfile(player)
-
 	if not profile then
-		warn(string.format("[PlayerDataService] Save skipped for %s: profile not loaded", player.Name))
+		warn(string.format("[PlayerDataService] Save skipped for %s: profile not loaded", playerName))
 		return false
 	end
 
+	if profiles[userId] ~= profile then
+		return true
+	end
+
 	if profile._SaveDisabled then
-		warn(string.format("[PlayerDataService] Save skipped for %s: profile was created after load failure", player.Name))
+		warn(string.format("[PlayerDataService] Save skipped for %s: profile was created after load failure", playerName))
 		return false
 	end
 
 	local force = options.Force == true or options.force == true
-	local userId = player.UserId
 	local saveState = profileSaveStateByUserId[userId] or {}
 	profileSaveStateByUserId[userId] = saveState
 
 	if saveState.InProgress then
-		print(string.format("[PlayerDataService] Skipped duplicate save for %s", player.Name))
-		return false
+		if not force then
+			print(string.format("[PlayerDataService] Skipped duplicate save for %s", playerName))
+			return false
+		end
+
+		while saveState.InProgress do
+			task.wait(0.05)
+		end
+
+		if profiles[userId] ~= profile then
+			return true
+		end
+
+		if profile._Dirty ~= true then
+			return true
+		end
 	end
 
 	local now = os.clock()
 
-	if saveState.LastSaveAt and now - saveState.LastSaveAt < SAVE_THROTTLE_SECONDS then
-		if not force or profile._Dirty ~= true then
-			print(string.format("[PlayerDataService] Skipped duplicate save for %s", player.Name))
-			return false
-		end
+	if not force and saveState.LastSaveAt and now - saveState.LastSaveAt < SAVE_THROTTLE_SECONDS then
+		print(string.format("[PlayerDataService] Skipped duplicate save for %s", playerName))
+		return false
 	end
 
 	if not force and profile._Dirty ~= true then
-		print(string.format("[PlayerDataService] Skipped duplicate save for %s", player.Name))
+		print(string.format("[PlayerDataService] Skipped duplicate save for %s", playerName))
 		return false
 	end
 
 	local store = getProfileStore()
 
 	if not store then
-		warn(string.format("[PlayerDataService] Profile for %s was not saved: DataStore is not available.", player.Name))
+		warn(string.format("[PlayerDataService] Profile for %s was not saved: DataStore is not available.", playerName))
 		return false
 	end
 
-	logProfileValues(string.format("Saving profile for %s", player.Name), profile)
-
 	local saveData = createSaveData(profile)
+	local savedDirtyRevision = profile._DirtyRevision or 0
 	saveState.InProgress = true
+	logProfileValues(string.format("Saving profile for %s", playerName), profile)
+
 	local success, result = pcall(function()
-		store:SetAsync(getProfileKey(player), saveData)
+		store:SetAsync(getProfileKeyFromUserId(userId), saveData)
 	end)
+
 	saveState.InProgress = false
 
 	if not success then
-		warn(string.format("[PlayerDataService] Failed to save profile for %s: %s", player.Name, tostring(result)))
+		warn(string.format("[PlayerDataService] Failed to save profile for %s: %s", playerName, tostring(result)))
 		return false
 	end
 
 	saveState.LastSaveAt = os.clock()
-	profile._Dirty = false
-	print(string.format("[PlayerDataService] Saved profile for %s.", player.Name))
-	PlayerDataService.SendProfileUpdate(player)
+
+	if (profile._DirtyRevision or 0) == savedDirtyRevision then
+		profile._Dirty = false
+	end
+
+	print(string.format("[PlayerDataService] Saved profile for %s.", playerName))
+
+	if playerForUpdate and playerForUpdate.Parent then
+		PlayerDataService.SendProfileUpdate(playerForUpdate)
+	end
+
 	return true
+end
+
+function PlayerDataService.SaveProfile(player, options)
+	local profile = PlayerDataService.GetProfile(player)
+
+	return saveProfileData(player.UserId, player.Name, profile, player, options)
+end
+
+function PlayerDataService.SaveAllProfiles(options)
+	options = options or {}
+
+	local result = true
+	local profilesToSave = {}
+
+	for userId, profile in pairs(profiles) do
+		table.insert(profilesToSave, {
+			UserId = userId,
+			Profile = profile,
+		})
+	end
+
+	for _, profileEntry in ipairs(profilesToSave) do
+		local userId = profileEntry.UserId
+		local profile = profileEntry.Profile
+		local player = Players:GetPlayerByUserId(userId)
+		local playerName = if player then player.Name else string.format("UserId_%d", userId)
+
+		if not saveProfileData(userId, playerName, profile, player, options) then
+			result = false
+		end
+	end
+
+	return result
 end
 
 function PlayerDataService.RemoveProfile(player)
 	local userId = player.UserId
 
 	if profiles[userId] then
-		PlayerDataService.SaveProfile(player, { Force = true })
+		PlayerDataService.SaveProfile(player, { Force = true, Wait = true })
 		profiles[userId] = nil
 		print(string.format("[PlayerDataService] Removed profile for %s from memory.", player.Name))
 	else
