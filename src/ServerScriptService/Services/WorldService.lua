@@ -317,11 +317,11 @@ local function createForestAreaVisual(forestResources)
 		createForestAreaStage(forestArea, stageName)
 	end
 
-	local promptPart = forestArea:FindFirstChild("HarvestForestAreaPromptPart")
+	local promptPart = forestArea:FindFirstChild("GatherForestAreaPromptPart")
 
 	if not promptPart then
 		promptPart = createPart(
-			"HarvestForestAreaPromptPart",
+			"GatherForestAreaPromptPart",
 			Vector3.new(5, 1, 5),
 			FOREST_AREA_POSITION + Vector3.new(0, 1.2, 0),
 			Color3.fromRGB(70, 120, 55),
@@ -332,15 +332,27 @@ local function createForestAreaVisual(forestResources)
 		promptPart.CanTouch = false
 	end
 
-	local prompt = promptPart:FindFirstChild("HarvestForestAreaPrompt")
+	local legacyPromptPart = forestArea:FindFirstChild("HarvestForestAreaPromptPart")
+
+	if legacyPromptPart and legacyPromptPart ~= promptPart then
+		legacyPromptPart:Destroy()
+	end
+
+	local legacyPrompt = promptPart:FindFirstChild("HarvestForestAreaPrompt")
+
+	if legacyPrompt then
+		legacyPrompt:Destroy()
+	end
+
+	local prompt = promptPart:FindFirstChild("GatherForestAreaPrompt")
 
 	if not prompt then
 		prompt = Instance.new("ProximityPrompt")
-		prompt.Name = "HarvestForestAreaPrompt"
+		prompt.Name = "GatherForestAreaPrompt"
 		prompt.ObjectText = "Лесная область"
 		prompt.ActionText = "Рубить лес"
-		prompt.HoldDuration = 0.8
-		prompt.MaxActivationDistance = 10
+		prompt.HoldDuration = 0.7
+		prompt.MaxActivationDistance = 12
 		prompt.RequiresLineOfSight = false
 		prompt.Parent = promptPart
 
@@ -349,14 +361,20 @@ local function createForestAreaVisual(forestResources)
 		end)
 	end
 
+	prompt.ObjectText = "Лесная зона"
+	prompt.ActionText = "Осваивать"
+	prompt.HoldDuration = 0.7
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+
 	if RunService:IsStudio() then
-		local debugPromptPart = forestArea:FindFirstChild("DebugResetForestAreaPromptPart")
+		local debugPromptPart = forestArea:FindFirstChild("DebugResetForestPromptPart")
 
 		if not debugPromptPart then
 			debugPromptPart = createPart(
-				"DebugResetForestAreaPromptPart",
-				Vector3.new(3, 1, 3),
-				FOREST_AREA_POSITION + Vector3.new(0, 1.2, 8),
+				"DebugResetForestPromptPart",
+				Vector3.new(3, 1.5, 0.5),
+				FOREST_AREA_POSITION + Vector3.new(9, 1.4, 8),
 				Color3.fromRGB(180, 80, 80),
 				forestArea
 			)
@@ -365,15 +383,27 @@ local function createForestAreaVisual(forestResources)
 			debugPromptPart.CanTouch = false
 		end
 
-		local debugPrompt = debugPromptPart:FindFirstChild("DebugResetForestAreaPrompt")
+		local legacyDebugPromptPart = forestArea:FindFirstChild("DebugResetForestAreaPromptPart")
+
+		if legacyDebugPromptPart and legacyDebugPromptPart ~= debugPromptPart then
+			legacyDebugPromptPart:Destroy()
+		end
+
+		local legacyDebugPrompt = debugPromptPart:FindFirstChild("DebugResetForestAreaPrompt")
+
+		if legacyDebugPrompt then
+			legacyDebugPrompt:Destroy()
+		end
+
+		local debugPrompt = debugPromptPart:FindFirstChild("DebugResetForestPrompt")
 
 		if not debugPrompt then
 			debugPrompt = Instance.new("ProximityPrompt")
-			debugPrompt.Name = "DebugResetForestAreaPrompt"
+			debugPrompt.Name = "DebugResetForestPrompt"
 			debugPrompt.ObjectText = "DEBUG ForestArea_01"
 			debugPrompt.ActionText = "Reset Forest"
 			debugPrompt.HoldDuration = 0.3
-			debugPrompt.MaxActivationDistance = 20
+			debugPrompt.MaxActivationDistance = 10
 			debugPrompt.RequiresLineOfSight = false
 			debugPrompt.Parent = debugPromptPart
 
@@ -381,6 +411,12 @@ local function createForestAreaVisual(forestResources)
 				ResourceService.ResetResourceZoneForDebug(player, FOREST_AREA_ID)
 			end)
 		end
+
+		debugPrompt.ObjectText = "DEBUG ForestArea_01"
+		debugPrompt.ActionText = "Reset Forest"
+		debugPrompt.HoldDuration = 0.3
+		debugPrompt.MaxActivationDistance = 10
+		debugPrompt.RequiresLineOfSight = false
 	end
 
 	return forestArea
@@ -509,6 +545,7 @@ function WorldService.TryClearForestPath(player)
 	end
 
 	profile.ForestUnlocked = true
+	PlayerDataService.MarkDirty(player)
 	removeBlockedPath()
 	ResourceService.CreateForestZoneResources(createForestZone(), true)
 	WorldService.UpdateForestAreaVisual(player)
@@ -578,7 +615,7 @@ function WorldService.UpdateForestAreaVisual(player)
 		end
 	end
 
-	local prompt = forestArea:FindFirstChild("HarvestForestAreaPrompt", true)
+	local prompt = forestArea:FindFirstChild("GatherForestAreaPrompt", true)
 
 	if prompt then
 		prompt.Enabled = state == "Active" and (forestAreaData.RemainingActions or 12) > 0

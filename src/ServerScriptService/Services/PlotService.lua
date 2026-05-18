@@ -824,6 +824,7 @@ function PlotService.UnlockPlot(player)
 	end
 
 	profile.PlotUnlocked = true
+	PlayerDataService.MarkDirty(player)
 	print(string.format("[PlotService] %s unlocked a plot.", player.Name))
 
 	if PlayerDataService.SendProfileUpdate then
@@ -940,6 +941,7 @@ function PlotService.TryBuildStorage(player)
 	end
 
 	profile.StorageBuilt = true
+	PlayerDataService.MarkDirty(player)
 	updateStorageVisual(player, profile)
 	updateWorkshopVisual(player, profile)
 
@@ -1037,6 +1039,7 @@ function PlotService.TryBuildWorkshop(player)
 	end
 
 	profile.WorkshopBuilt = true
+	PlayerDataService.MarkDirty(player)
 	updateWorkshopVisual(player, profile)
 
 	if PlayerDataService.SendProfileUpdate then
@@ -1136,6 +1139,7 @@ function PlotService.TryCraftToolKit(player)
 	end
 
 	profile.ToolKitLevel = 1
+	PlayerDataService.MarkDirty(player)
 	updateWorkshopVisual(player, profile)
 
 	if PlayerDataService.SendProfileUpdate then
@@ -1225,6 +1229,7 @@ function PlotService.TryUpgradeHouse(player)
 	end
 
 	profile.HouseLevel += 1
+	PlayerDataService.MarkDirty(player)
 	updateHouseVisual(player, profile.HouseLevel)
 
 	if PlayerDataService.SendProfileUpdate then

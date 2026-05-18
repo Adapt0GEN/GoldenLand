@@ -32,6 +32,7 @@ local function addResource(player, resourceName, amount)
 	end
 
 	profile[resourceName] += amount
+	PlayerDataService.MarkDirty(player)
 
 	print(string.format(
 		"[CurrencyService] Added %d %s to %s. New amount: %d.",
@@ -86,6 +87,7 @@ function CurrencyService.SpendResources(player, cost)
 	profile.Wood -= woodCost
 	profile.Stone -= stoneCost
 	profile.Metal -= metalCost
+	PlayerDataService.MarkDirty(player)
 
 	printResourceState(player, profile, "Resource totals after spend")
 	sendProfileUpdate(player)

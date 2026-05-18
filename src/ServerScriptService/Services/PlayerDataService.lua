@@ -7,8 +7,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local PlayerDataService = {}
 
 local profiles = {}
+local profileSaveStateByUserId = {}
 local PROFILE_STORE_NAME = "GoldenLandPlayerProfiles_v1"
 local profileStore = nil
+local SAVE_THROTTLE_SECONDS = 10
 local DEFAULT_RESOURCE_ZONES = {
 	ForestArea_01 = {
 		State = "Active",
@@ -62,11 +64,41 @@ local function createDefaultProfile(player)
 		CompletedQuests = {},
 		QuestProgress = {},
 		ResourceZones = createDefaultResourceZones(),
+		_Dirty = false,
+		_SaveDisabled = false,
 	}
 end
 
 local function getProfileKey(player)
 	return string.format("Player_%d", player.UserId)
+end
+
+local function getForestAreaLogValues(profile)
+	local forestZone = profile.ResourceZones and profile.ResourceZones.ForestArea_01
+
+	if type(forestZone) ~= "table" then
+		return "nil", 0
+	end
+
+	return forestZone.State or "nil", forestZone.RemainingActions or 0
+end
+
+local function logProfileValues(prefix, profile)
+	local forestState, forestRemainingActions = getForestAreaLogValues(profile)
+
+	print(string.format(
+		"[PlayerDataService] %s: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d ToolKitLevel=%d ForestUnlocked=%s ForestArea_01.State=%s RemainingActions=%d",
+		prefix,
+		profile.Gold or 0,
+		profile.Wood or 0,
+		profile.Stone or 0,
+		profile.Metal or 0,
+		profile.HouseLevel or 1,
+		profile.ToolKitLevel or 0,
+		tostring(profile.ForestUnlocked == true),
+		forestState,
+		forestRemainingActions
+	))
 end
 
 local function getProfileStore()
@@ -215,13 +247,16 @@ end
 
 local function loadProfile(player)
 	local store = getProfileStore()
+	local profileKey = getProfileKey(player)
+
+	print(string.format("[PlayerDataService] Loading profile key: %s", profileKey))
 
 	if not store then
 		return nil, true
 	end
 
 	local success, result = pcall(function()
-		return store:GetAsync(getProfileKey(player))
+		return store:GetAsync(profileKey)
 	end)
 
 	if not success then
@@ -247,13 +282,17 @@ function PlayerDataService.CreateProfile(player)
 	local profile, loadFailed = loadProfile(player)
 
 	if profile then
-		print(string.format("[PlayerDataService] Loaded saved profile for %s (UserId: %d).", player.Name, userId))
+		print(string.format("[PlayerDataService] Loaded saved data for %s", player.Name))
+		logProfileValues("Loaded profile values", profile)
 	elseif loadFailed then
 		profile = createDefaultProfile(player)
+		profile._SaveDisabled = true
 		warn(string.format("[PlayerDataService] Created temporary profile for %s because saved data could not be loaded.", player.Name))
+		logProfileValues("Temporary default profile values", profile)
 	else
 		profile = createDefaultProfile(player)
-		print(string.format("[PlayerDataService] Created starter profile for %s (UserId: %d).", player.Name, userId))
+		print(string.format("[PlayerDataService] No saved data found for %s, using default profile", player.Name))
+		logProfileValues("Default profile values", profile)
 	end
 
 	profiles[userId] = profile
@@ -269,6 +308,17 @@ end
 
 function PlayerDataService.GetProfile(player)
 	return profiles[player.UserId]
+end
+
+function PlayerDataService.MarkDirty(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return false
+	end
+
+	profile._Dirty = true
+	return true
 end
 
 function PlayerDataService.GetPublicProfile(player)
@@ -313,11 +363,42 @@ function PlayerDataService.SendProfileUpdate(player)
 	return true
 end
 
-function PlayerDataService.SaveProfile(player)
+function PlayerDataService.SaveProfile(player, options)
+	options = options or {}
+
 	local profile = PlayerDataService.GetProfile(player)
 
 	if not profile then
-		print(string.format("[PlayerDataService] No profile to save for %s.", player.Name))
+		warn(string.format("[PlayerDataService] Save skipped for %s: profile not loaded", player.Name))
+		return false
+	end
+
+	if profile._SaveDisabled then
+		warn(string.format("[PlayerDataService] Save skipped for %s: profile was created after load failure", player.Name))
+		return false
+	end
+
+	local force = options.Force == true or options.force == true
+	local userId = player.UserId
+	local saveState = profileSaveStateByUserId[userId] or {}
+	profileSaveStateByUserId[userId] = saveState
+
+	if saveState.InProgress then
+		print(string.format("[PlayerDataService] Skipped duplicate save for %s", player.Name))
+		return false
+	end
+
+	local now = os.clock()
+
+	if saveState.LastSaveAt and now - saveState.LastSaveAt < SAVE_THROTTLE_SECONDS then
+		if not force or profile._Dirty ~= true then
+			print(string.format("[PlayerDataService] Skipped duplicate save for %s", player.Name))
+			return false
+		end
+	end
+
+	if not force and profile._Dirty ~= true then
+		print(string.format("[PlayerDataService] Skipped duplicate save for %s", player.Name))
 		return false
 	end
 
@@ -328,16 +409,22 @@ function PlayerDataService.SaveProfile(player)
 		return false
 	end
 
+	logProfileValues(string.format("Saving profile for %s", player.Name), profile)
+
 	local saveData = createSaveData(profile)
+	saveState.InProgress = true
 	local success, result = pcall(function()
 		store:SetAsync(getProfileKey(player), saveData)
 	end)
+	saveState.InProgress = false
 
 	if not success then
 		warn(string.format("[PlayerDataService] Failed to save profile for %s: %s", player.Name, tostring(result)))
 		return false
 	end
 
+	saveState.LastSaveAt = os.clock()
+	profile._Dirty = false
 	print(string.format("[PlayerDataService] Saved profile for %s.", player.Name))
 	PlayerDataService.SendProfileUpdate(player)
 	return true
@@ -347,7 +434,7 @@ function PlayerDataService.RemoveProfile(player)
 	local userId = player.UserId
 
 	if profiles[userId] then
-		PlayerDataService.SaveProfile(player)
+		PlayerDataService.SaveProfile(player, { Force = true })
 		profiles[userId] = nil
 		print(string.format("[PlayerDataService] Removed profile for %s from memory.", player.Name))
 	else

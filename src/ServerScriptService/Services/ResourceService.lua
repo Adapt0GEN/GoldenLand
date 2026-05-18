@@ -22,6 +22,7 @@ local FOREST_ZONE_RESOURCES_FOLDER_NAME = "ForestZoneResources"
 local FOREST_AREA_ID = "ForestArea_01"
 local FOREST_AREA_DEFAULT_REMAINING_ACTIONS = 12
 local FOREST_AREA_DEBOUNCE_SECONDS = 0.6
+local FOREST_AREA_DEBUG_RESET_DEBOUNCE_SECONDS = 1
 
 local TREE_POSITIONS = {
 	Vector3.new(20, 2, 8),
@@ -48,6 +49,7 @@ local FOREST_STONE_POSITIONS = {
 }
 local goldMineCooldownsByUserId = {}
 local forestAreaHarvestCooldownsByUserId = {}
+local forestAreaDebugResetCooldownsByUserId = {}
 
 local function createPart(name, size, position, color, parent)
 	local part = Instance.new("Part")
@@ -303,6 +305,18 @@ local function canHarvestForestArea(player)
 	end
 
 	forestAreaHarvestCooldownsByUserId[player.UserId] = now
+	return true
+end
+
+local function canDebugResetForestArea(player)
+	local now = os.clock()
+	local lastResetAt = forestAreaDebugResetCooldownsByUserId[player.UserId]
+
+	if lastResetAt and now - lastResetAt < FOREST_AREA_DEBUG_RESET_DEBOUNCE_SECONDS then
+		return false
+	end
+
+	forestAreaDebugResetCooldownsByUserId[player.UserId] = now
 	return true
 end
 
@@ -597,7 +611,7 @@ function ResourceService.HarvestForestArea(player)
 	if forestZone.State == "Empty" or forestZone.RemainingActions <= 0 then
 		forestZone.State = "Empty"
 		forestZone.RemainingActions = 0
-		print("[ResourceService] ForestArea_01 is now Empty")
+		print(string.format("[ResourceService] ForestArea_01 is Empty; gather blocked for %s", player.Name))
 
 		local WorldService = require(script.Parent.WorldService)
 		WorldService.UpdateForestAreaVisual(player)
@@ -606,6 +620,7 @@ function ResourceService.HarvestForestArea(player)
 
 	CurrencyService.AddWood(player, 1)
 	forestZone.RemainingActions = math.max(forestZone.RemainingActions - 1, 0)
+	PlayerDataService.MarkDirty(player)
 
 	print(string.format("[ResourceService] %s gathered ForestArea_01", player.Name))
 	print(string.format("[ResourceService] ForestArea_01 remaining actions: %d", forestZone.RemainingActions))
@@ -624,10 +639,6 @@ function ResourceService.HarvestForestArea(player)
 		PlayerDataService.SendProfileUpdate(player)
 	end
 
-	if PlayerDataService.SaveProfile then
-		PlayerDataService.SaveProfile(player)
-	end
-
 	return true
 end
 
@@ -638,6 +649,10 @@ function ResourceService.ResetResourceZoneForDebug(player, resourceZoneId)
 
 	if resourceZoneId ~= FOREST_AREA_ID then
 		warn(string.format("[ResourceService] DEBUG reset rejected for unknown resource zone: %s", tostring(resourceZoneId)))
+		return false
+	end
+
+	if not canDebugResetForestArea(player) then
 		return false
 	end
 
@@ -653,6 +668,7 @@ function ResourceService.ResetResourceZoneForDebug(player, resourceZoneId)
 		State = "Active",
 		RemainingActions = FOREST_AREA_DEFAULT_REMAINING_ACTIONS,
 	}
+	PlayerDataService.MarkDirty(player)
 	forestAreaHarvestCooldownsByUserId[player.UserId] = nil
 
 	local WorldService = require(script.Parent.WorldService)
@@ -660,10 +676,6 @@ function ResourceService.ResetResourceZoneForDebug(player, resourceZoneId)
 
 	if PlayerDataService.SendProfileUpdate then
 		PlayerDataService.SendProfileUpdate(player)
-	end
-
-	if PlayerDataService.SaveProfile then
-		PlayerDataService.SaveProfile(player)
 	end
 
 	print(string.format(
