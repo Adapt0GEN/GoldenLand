@@ -18,7 +18,7 @@ screenGui.Parent = playerGui
 
 local statsLabel = Instance.new("TextLabel")
 statsLabel.Name = "StatsLabel"
-statsLabel.Size = UDim2.fromOffset(260, 135)
+statsLabel.Size = UDim2.fromOffset(280, 160)
 statsLabel.Position = UDim2.fromOffset(20, 20)
 statsLabel.BackgroundColor3 = Color3.fromRGB(28, 34, 30)
 statsLabel.BackgroundTransparency = 0.12
@@ -29,13 +29,13 @@ statsLabel.Font = Enum.Font.SourceSansBold
 statsLabel.TextWrapped = true
 statsLabel.TextXAlignment = Enum.TextXAlignment.Left
 statsLabel.TextYAlignment = Enum.TextYAlignment.Center
-statsLabel.Text = "Золото: 0\nДерево: 0\nКамень: 0\nМеталл: 0\nДом: уровень 1"
+statsLabel.Text = "Золото: 0\nДерево: 0\nКамень: 0\nМеталл: 0\nДом: уровень 1\nИнструменты: нет"
 statsLabel.Parent = screenGui
 
 local questLabel = Instance.new("TextLabel")
 questLabel.Name = "QuestLabel"
 questLabel.Size = UDim2.fromOffset(320, 90)
-questLabel.Position = UDim2.fromOffset(20, 170)
+questLabel.Position = UDim2.fromOffset(20, 195)
 questLabel.BackgroundColor3 = Color3.fromRGB(35, 30, 24)
 questLabel.BackgroundTransparency = 0.15
 questLabel.BorderSizePixel = 0
@@ -71,23 +71,31 @@ local function updateStatsUi(data)
 	local stone = data.Stone or 0
 	local metal = data.Metal or 0
 	local houseLevel = data.HouseLevel or 1
+	local toolKitLevel = data.ToolKitLevel or 0
+	local toolKitText = "нет"
+
+	if toolKitLevel >= 1 then
+		toolKitText = string.format("уровень %d", toolKitLevel)
+	end
 
 	print(string.format(
-		"[ClientMain] Received stats update: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d",
+		"[ClientMain] Received stats update: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d ToolKitLevel=%d",
 		gold,
 		wood,
 		stone,
 		metal,
-		houseLevel
+		houseLevel,
+		toolKitLevel
 	))
 
 	statsLabel.Text = string.format(
-		"Золото: %d\nДерево: %d\nКамень: %d\nМеталл: %d\nДом: уровень %d",
+		"Золото: %d\nДерево: %d\nКамень: %d\nМеталл: %d\nДом: уровень %d\nИнструменты: %s",
 		gold,
 		wood,
 		stone,
 		metal,
-		houseLevel
+		houseLevel,
+		toolKitText
 	)
 end
 

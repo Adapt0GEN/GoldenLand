@@ -26,6 +26,20 @@ local WORKSHOP_BUILD_COST = {
 	Stone = 10,
 }
 
+local TOOL_KIT_I_COST = {
+	Gold = 3,
+	Wood = 10,
+	Stone = 5,
+	Metal = 5,
+}
+
+local TOOL_KIT_RESOURCE_LABELS = {
+	Gold = "золото",
+	Wood = "дерево",
+	Stone = "камень",
+	Metal = "металл",
+}
+
 local HOUSE_UPGRADE_COSTS = {
 	[1] = {
 		Gold = 25,
@@ -158,6 +172,46 @@ local function addWorkshopBuildPrompt(promptPart)
 		PlotService.TryBuildWorkshop(player)
 	end)
 
+	return prompt
+end
+
+local function removeToolKitCraftPrompt(workshop)
+	local craftPrompt = workshop:FindFirstChild("CraftToolKitPrompt", true)
+
+	if craftPrompt then
+		craftPrompt:Destroy()
+	end
+end
+
+local function addToolKitCraftPrompt(player, workshop)
+	local promptPart = workshop:FindFirstChild("WorkshopBody")
+
+	if not promptPart then
+		warn(string.format("[PlotService] WorkshopBody was not found for %s. Tool kit prompt was not created.", player.Name))
+		return nil
+	end
+
+	local existingPrompt = promptPart:FindFirstChild("CraftToolKitPrompt")
+
+	if existingPrompt then
+		return existingPrompt
+	end
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "CraftToolKitPrompt"
+	prompt.ObjectText = "Мастерская"
+	prompt.ActionText = "Изготовить инструменты"
+	prompt.HoldDuration = 0.7
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt.Enabled = true
+	prompt.Parent = promptPart
+
+	prompt.Triggered:Connect(function(triggeringPlayer)
+		PlotService.TryCraftToolKit(triggeringPlayer)
+	end)
+
+	print(string.format("[PlotService] Created tool kit craft prompt for %s.", player.Name))
 	return prompt
 end
 
@@ -712,7 +766,13 @@ local function updateWorkshopVisual(player, profile)
 
 	if profile.WorkshopBuilt then
 		print(string.format("[PlotService] Workshop already built for %s. Restoring visual.", player.Name))
-		createWorkshopBuilding(player, plotModel)
+		local workshop = createWorkshopBuilding(player, plotModel)
+
+		if (profile.ToolKitLevel or 0) < 1 then
+			addToolKitCraftPrompt(player, workshop)
+		else
+			removeToolKitCraftPrompt(workshop)
+		end
 	elseif profile.StorageBuilt then
 		createWorkshopBuildSpot(player, plotModel)
 	else
@@ -989,6 +1049,105 @@ function PlotService.TryBuildWorkshop(player)
 
 	sendPlayerMessage(player, "Мастерская построена")
 	print(string.format("[PlotService] %s built workshop.", player.Name))
+
+	return true
+end
+
+function PlotService.CanCraftToolKit(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return false, "профиль не найден"
+	end
+
+	if profile.WorkshopBuilt ~= true then
+		return false, "мастерская не построена"
+	end
+
+	if (profile.ToolKitLevel or 0) >= 1 then
+		return false, "набор инструментов уже изготовлен"
+	end
+
+	local missingResources = {}
+	local missingResourceMessages = {}
+
+	if profile.Gold < TOOL_KIT_I_COST.Gold then
+		table.insert(missingResources, string.format("Gold %d/%d", profile.Gold, TOOL_KIT_I_COST.Gold))
+		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Gold, profile.Gold, TOOL_KIT_I_COST.Gold))
+	end
+
+	if profile.Wood < TOOL_KIT_I_COST.Wood then
+		table.insert(missingResources, string.format("Wood %d/%d", profile.Wood, TOOL_KIT_I_COST.Wood))
+		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Wood, profile.Wood, TOOL_KIT_I_COST.Wood))
+	end
+
+	if profile.Stone < TOOL_KIT_I_COST.Stone then
+		table.insert(missingResources, string.format("Stone %d/%d", profile.Stone, TOOL_KIT_I_COST.Stone))
+		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Stone, profile.Stone, TOOL_KIT_I_COST.Stone))
+	end
+
+	if profile.Metal < TOOL_KIT_I_COST.Metal then
+		table.insert(missingResources, string.format("Metal %d/%d", profile.Metal, TOOL_KIT_I_COST.Metal))
+		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Metal, profile.Metal, TOOL_KIT_I_COST.Metal))
+	end
+
+	if #missingResources > 0 then
+		return false, "не хватает ресурсов: " .. table.concat(missingResources, ", "), TOOL_KIT_I_COST, "Не хватает: " .. table.concat(missingResourceMessages, ", ")
+	end
+
+	return true, "можно изготовить", TOOL_KIT_I_COST
+end
+
+function PlotService.TryCraftToolKit(player)
+	print(string.format("[PlotService] %s tried to craft tool kit.", player.Name))
+
+	local canCraft, reason, cost, playerMessage = PlotService.CanCraftToolKit(player)
+
+	if not canCraft then
+		if reason == "профиль не найден" then
+			warn(string.format("[PlotService] Profile for %s was not found. Tool kit was not crafted.", player.Name))
+		elseif reason == "мастерская не построена" then
+			warn(string.format("[PlotService] %s cannot craft tool kit: workshop is not built.", player.Name))
+			sendPlayerMessage(player, "Сначала постройте мастерскую")
+		elseif reason == "набор инструментов уже изготовлен" then
+			print(string.format("[PlotService] %s already has tool kit.", player.Name))
+			sendPlayerMessage(player, "Набор инструментов уже изготовлен")
+		elseif string.find(reason, "не хватает ресурсов", 1, true) then
+			warn(string.format("[PlotService] %s cannot craft tool kit: missing %s.", player.Name, string.gsub(reason, "не хватает ресурсов: ", "")))
+			sendPlayerMessage(player, playerMessage or "Недостаточно ресурсов для набора инструментов")
+		else
+			warn(string.format("[PlotService] %s cannot craft tool kit: %s.", player.Name, reason))
+			sendPlayerMessage(player, "Набор инструментов нельзя изготовить")
+		end
+
+		return false
+	end
+
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		warn(string.format("[PlotService] Profile for %s was not found. Tool kit was not crafted.", player.Name))
+		return false
+	end
+
+	if not CurrencyService.SpendResources(player, cost) then
+		sendPlayerMessage(player, "Не удалось списать ресурсы для набора инструментов")
+		return false
+	end
+
+	profile.ToolKitLevel = 1
+	updateWorkshopVisual(player, profile)
+
+	if PlayerDataService.SendProfileUpdate then
+		PlayerDataService.SendProfileUpdate(player)
+	end
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player)
+	end
+
+	sendPlayerMessage(player, "Набор инструментов I изготовлен")
+	print(string.format("[PlotService] %s crafted ToolKitLevel 1.", player.Name))
 
 	return true
 end

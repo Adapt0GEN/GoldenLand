@@ -41,6 +41,7 @@ local function createDefaultProfile(player)
 		PlotUnlocked = false,
 		StorageBuilt = false,
 		WorkshopBuilt = false,
+		ToolKitLevel = 0,
 		CurrentQuestId = nil,
 		CompletedQuests = {},
 		QuestProgress = {},
@@ -106,6 +107,7 @@ local function normalizeLoadedProfile(player, savedProfile)
 	applyNumber(profile, savedProfile, "Stone")
 	applyNumber(profile, savedProfile, "Metal")
 	applyNumber(profile, savedProfile, "HouseLevel")
+	applyNumber(profile, savedProfile, "ToolKitLevel")
 
 	if type(savedProfile.PlotUnlocked) == "boolean" then
 		profile.PlotUnlocked = savedProfile.PlotUnlocked
@@ -145,6 +147,7 @@ local function createSaveData(profile)
 		PlotUnlocked = profile.PlotUnlocked,
 		StorageBuilt = profile.StorageBuilt,
 		WorkshopBuilt = profile.WorkshopBuilt,
+		ToolKitLevel = profile.ToolKitLevel,
 		CurrentQuestId = profile.CurrentQuestId,
 		CompletedQuests = copyTable(profile.CompletedQuests),
 		QuestProgress = copyTable(profile.QuestProgress),
@@ -225,6 +228,7 @@ function PlayerDataService.GetPublicProfile(player)
 		PlotUnlocked = profile.PlotUnlocked,
 		StorageBuilt = profile.StorageBuilt,
 		WorkshopBuilt = profile.WorkshopBuilt,
+		ToolKitLevel = profile.ToolKitLevel,
 	}
 end
 
@@ -237,12 +241,13 @@ function PlayerDataService.SendProfileUpdate(player)
 
 	getRemoteEvent("PlayerStatsUpdateEvent"):FireClient(player, publicProfile)
 	print(string.format(
-		"[PlayerDataService] Sent stats update: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d",
+		"[PlayerDataService] Sent stats update: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d ToolKitLevel=%d",
 		publicProfile.Gold,
 		publicProfile.Wood,
 		publicProfile.Stone,
 		publicProfile.Metal,
-		publicProfile.HouseLevel
+		publicProfile.HouseLevel,
+		publicProfile.ToolKitLevel
 	))
 	return true
 end
