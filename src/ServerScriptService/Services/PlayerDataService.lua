@@ -109,6 +109,7 @@ local function createDefaultProfile(player)
 		WorkshopBuilt = false,
 		ToolKitLevel = 0,
 		ForestUnlocked = false,
+		RockZoneUnlocked = false,
 		ForestZoneState = "Locked",
 		ForestZoneClearedObjects = {},
 		CurrentQuestId = nil,
@@ -380,6 +381,10 @@ local function normalizeLoadedProfile(player, savedProfile)
 		profile.ForestUnlocked = savedProfile.ForestUnlocked
 	end
 
+	if type(savedProfile.RockZoneUnlocked) == "boolean" then
+		profile.RockZoneUnlocked = savedProfile.RockZoneUnlocked
+	end
+
 	if type(savedProfile.CurrentQuestId) == "string" or savedProfile.CurrentQuestId == nil then
 		profile.CurrentQuestId = savedProfile.CurrentQuestId
 	end
@@ -412,6 +417,7 @@ local function createSaveData(profile)
 		WorkshopBuilt = profile.WorkshopBuilt,
 		ToolKitLevel = profile.ToolKitLevel,
 		ForestUnlocked = profile.ForestUnlocked,
+		RockZoneUnlocked = profile.RockZoneUnlocked,
 		ForestZoneState = profile.ForestZoneState,
 		ForestZoneClearedObjects = copyTable(profile.ForestZoneClearedObjects),
 		CurrentQuestId = profile.CurrentQuestId,
@@ -516,6 +522,7 @@ function PlayerDataService.GetPublicProfile(player)
 		WorkshopBuilt = profile.WorkshopBuilt,
 		ToolKitLevel = profile.ToolKitLevel,
 		ForestUnlocked = profile.ForestUnlocked,
+		RockZoneUnlocked = profile.RockZoneUnlocked,
 		ForestZoneState = profile.ForestZoneState,
 		ForestZoneClearedObjects = copyTable(profile.ForestZoneClearedObjects),
 		ResourceZones = copyTable(profile.ResourceZones),

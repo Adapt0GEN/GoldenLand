@@ -11,6 +11,8 @@ local WorldService = {}
 
 local WORLD_ROOT_NAME = "WorldRoot"
 local BLOCKED_PATH_NAME = "BlockedPathToForest"
+local ROCK_PASS_NAME = "RockPass"
+local ROCK_ZONE_NAME = "RockZone"
 local FOREST_ZONE_NAME = "ForestZone"
 local FOREST_ZONE_DECOR_FOLDER_NAME = "ForestZoneDecor"
 local FOREST_ZONE_INTERACTIVES_FOLDER_NAME = "ForestZoneInteractives"
@@ -20,6 +22,8 @@ local LEGACY_FOREST_ZONE_VISUAL_STATE_FOLDER_NAME = "ForestZoneVisualState"
 local FOREST_AREA_ID = "ForestArea_01"
 local BLOCKED_PATH_POSITION = Vector3.new(-14, 1.1, 8)
 local FOREST_ZONE_POSITION = Vector3.new(-38, 0.05, 8)
+local ROCK_PASS_POSITION = Vector3.new(-58, 1.1, 8)
+local ROCK_ZONE_POSITION = Vector3.new(-78, 0.05, 8)
 local FOREST_AREA_POSITION = FOREST_ZONE_POSITION + Vector3.new(0, 0, 2)
 local FOREST_AREA_STAGE_NAMES = {
 	"Active",
@@ -154,6 +158,22 @@ local function removeBlockedPath()
 
 	if blockedPath then
 		blockedPath:Destroy()
+	end
+end
+
+local function removeRockPass()
+	local rockPass = getWorldRoot():FindFirstChild(ROCK_PASS_NAME)
+
+	if rockPass then
+		rockPass:Destroy()
+	end
+end
+
+local function removeRockZone()
+	local rockZone = getWorldRoot():FindFirstChild(ROCK_ZONE_NAME)
+
+	if rockZone then
+		rockZone:Destroy()
 	end
 end
 
@@ -739,6 +759,149 @@ local function createBlockedPathToForest()
 	return blockedPath
 end
 
+local function createRockZone()
+	local worldRoot = getWorldRoot()
+	local existingRockZone = worldRoot:FindFirstChild(ROCK_ZONE_NAME)
+
+	if existingRockZone then
+		return existingRockZone
+	end
+
+	local rockZone = Instance.new("Model")
+	rockZone.Name = ROCK_ZONE_NAME
+	rockZone.Parent = worldRoot
+
+	local ground = createAreaMarker(
+		"RockZoneGround",
+		Vector3.new(34, 0.4, 24),
+		ROCK_ZONE_POSITION,
+		Color3.fromRGB(95, 95, 90),
+		rockZone
+	)
+	ground.Material = Enum.Material.Rock
+
+	local rockPositions = {
+		Vector3.new(-10, 0.8, -6),
+		Vector3.new(-5, 0.7, 5),
+		Vector3.new(2, 0.9, -4),
+		Vector3.new(8, 0.7, 6),
+		Vector3.new(11, 0.8, -2),
+	}
+
+	for index, offset in ipairs(rockPositions) do
+		local rock = createPart(
+			string.format("DecorRock_%02d", index),
+			Vector3.new(3 + (index % 2), 1.4 + (index % 3) * 0.3, 2.5 + (index % 2)),
+			ROCK_ZONE_POSITION + offset,
+			Color3.fromRGB(105 + index * 4, 105 + index * 3, 110 + index * 2),
+			rockZone
+		)
+		rock.Material = Enum.Material.Slate
+		rock.Rotation = Vector3.new(0, index * 17, index * 5)
+	end
+
+	local metalPositions = {
+		Vector3.new(-7, 0.55, 0),
+		Vector3.new(4, 0.55, 3),
+		Vector3.new(9, 0.55, -7),
+	}
+
+	for index, offset in ipairs(metalPositions) do
+		local metal = createPart(
+			string.format("MetalDetail_%02d", index),
+			Vector3.new(1.4, 0.5, 1.4),
+			ROCK_ZONE_POSITION + offset,
+			Color3.fromRGB(135, 140, 145),
+			rockZone
+		)
+		metal.Material = Enum.Material.Metal
+	end
+
+	createTextSign("RockZoneSign", "Каменистая зона", ROCK_ZONE_POSITION + Vector3.new(0, 2.5, -13), rockZone)
+
+	print("[WorldService] Created RockZone.")
+	return rockZone
+end
+
+local function createRockPass()
+	local worldRoot = getWorldRoot()
+	local existingRockPass = worldRoot:FindFirstChild(ROCK_PASS_NAME)
+
+	if existingRockPass then
+		return existingRockPass
+	end
+
+	local rockPass = Instance.new("Model")
+	rockPass.Name = ROCK_PASS_NAME
+	rockPass.Parent = worldRoot
+
+	local blocker = createPart(
+		"RockPassBlocker",
+		Vector3.new(9, 3.4, 3),
+		ROCK_PASS_POSITION,
+		Color3.fromRGB(100, 100, 100),
+		rockPass
+	)
+	blocker.Material = Enum.Material.Rock
+
+	local leftPile = createPart(
+		"LeftRockPile",
+		Vector3.new(3.5, 2.3, 3.5),
+		ROCK_PASS_POSITION + Vector3.new(-5.2, -0.2, 0.3),
+		Color3.fromRGB(90, 95, 95),
+		rockPass
+	)
+	leftPile.Material = Enum.Material.Slate
+
+	local rightPile = createPart(
+		"RightRockPile",
+		Vector3.new(3.8, 2.5, 3.2),
+		ROCK_PASS_POSITION + Vector3.new(5.2, -0.1, -0.2),
+		Color3.fromRGB(95, 100, 100),
+		rockPass
+	)
+	rightPile.Material = Enum.Material.Slate
+
+	createPart(
+		"SmallMetalShard",
+		Vector3.new(1.2, 0.35, 1.8),
+		ROCK_PASS_POSITION + Vector3.new(0, -1.25, -2.2),
+		Color3.fromRGB(140, 145, 150),
+		rockPass
+	).Material = Enum.Material.Metal
+
+	createTextSign("RockPassSign", "Каменистый проход", ROCK_PASS_POSITION + Vector3.new(0, 2.9, -3.4), rockPass)
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "ClearRockPassPrompt"
+	prompt.ObjectText = "Каменистый проход"
+	prompt.ActionText = "Разобрать проход"
+	prompt.HoldDuration = 0.8
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt.Enabled = true
+	prompt.Parent = blocker
+
+	prompt.Triggered:Connect(function(player)
+		WorldService.TryClearRockPass(player)
+	end)
+
+	rockPass.PrimaryPart = blocker
+
+	print("[WorldService] Created RockPass.")
+	return rockPass
+end
+
+local function updateRockAccessForProfile(player, profile)
+	if profile.RockZoneUnlocked == true then
+		removeRockPass()
+		createRockZone()
+	else
+		removeRockZone()
+		createRockPass()
+	end
+end
+
 function WorldService.TryClearForestPath(player)
 	print(string.format("[WorldService] %s tried to clear forest path.", player.Name))
 
@@ -787,6 +950,47 @@ function WorldService.TryClearForestPath(player)
 	return true
 end
 
+function WorldService.TryClearRockPass(player)
+	print(string.format("[WorldService] %s tried to clear rock pass.", player.Name))
+
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		warn(string.format("[WorldService] Profile for %s was not found. Rock pass was not cleared.", player.Name))
+		return false
+	end
+
+	if profile.RockZoneUnlocked == true then
+		removeRockPass()
+		createRockZone()
+		return true
+	end
+
+	if (profile.ToolKitLevel or 0) < 2 then
+		warn(string.format("[WorldService] %s cannot clear rock pass: ToolKitLevel 2 required.", player.Name))
+		sendPlayerMessage(player, "Нужен набор инструментов II")
+		return false
+	end
+
+	profile.RockZoneUnlocked = true
+	PlayerDataService.MarkDirty(player)
+	removeRockPass()
+	createRockZone()
+
+	if PlayerDataService.SendProfileUpdate then
+		PlayerDataService.SendProfileUpdate(player)
+	end
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player)
+	end
+
+	sendPlayerMessage(player, "Каменистая зона открыта")
+	print(string.format("[WorldService] %s unlocked rock zone.", player.Name))
+
+	return true
+end
+
 function WorldService.UpdateForestAccessForPlayer(player)
 	local profile = PlayerDataService.GetProfile(player)
 
@@ -806,6 +1010,8 @@ function WorldService.UpdateForestAccessForPlayer(player)
 		print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, profile.ForestZoneState))
 		createBlockedPathToForest()
 	end
+
+	updateRockAccessForProfile(player, profile)
 
 	return true
 end
@@ -901,6 +1107,7 @@ function WorldService.CreateStartWorld()
 	if existingWorld then
 		print("[WorldService] Start world already exists.")
 		createBlockedPathToForest()
+		createRockPass()
 		return existingWorld
 	end
 
@@ -971,6 +1178,7 @@ function WorldService.CreateStartWorld()
 	createTextSign("PlotDirectionSign", "К личной земле", Vector3.new(0, 2.5, 28), plotMarker)
 
 	createBlockedPathToForest()
+	createRockPass()
 
 	print("[WorldService] Start world created.")
 	return worldRoot
