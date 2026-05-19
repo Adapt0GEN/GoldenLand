@@ -1,26 +1,56 @@
 # Planning README
 
-Текущий фокус проекта:
+Актуальный комплект planning-файлов проекта GoldenLand.
+
+## Как использовать
+
+Папку `docs/planning/` можно скопировать в:
 
 ```text
-MVP 0.2.6 — визуальное развитие ForestZone после очистки.
+C:\Users\tim90\Documents\GoldenLand\docs\planning
 ```
 
-Главные файлы:
+## Главный принцип
+
+Идеи не должны сразу превращаться в задачи для Codex.
+
+Порядок:
 
 ```text
-00_current_state.md — текущее состояние
-01_roadmap.md — дорожная карта
-02_idea_backlog.md — идеи
-03_decisions_log.md — принятые решения
-05_next_codex_task.md — следующая задача для Codex
-07_zone_architecture.md — правила зон
-08_resource_rules.md — правила ресурсов
-09_visual_progression_rules.md — правила визуального прогресса
+идея
+↓
+02_idea_backlog.md
+↓
+03_decisions_log.md, если это архитектурное решение
+↓
+01_roadmap.md, если идея принята в долгосрочный план
+↓
+05_next_codex_task.md, только когда это ближайшая задача
 ```
 
-Правило:
+## В Codex отправляется только одна ближайшая задача
+
+Текущая ближайшая задача хранится в:
 
 ```text
-В Codex отправляется только одна ближайшая задача из 05_next_codex_task.md.
+05_next_codex_task.md
 ```
+
+Не нужно давать Codex весь backlog как задачу.
+
+## Актуальный фокус
+
+```text
+MVP 0.2.6-fix — добить визуальную очистку ForestZone в Empty.
+```
+
+После теста было видно:
+
+```text
+ForestZoneState стал Empty
+Empty-визуал создаётся
+но зона визуально очищается не полностью
+ResourceService всё ещё создаёт ForestZone resources
+```
+
+Поэтому текущая ближайшая задача — фикс конфликта WorldService и ResourceService в ForestZone.

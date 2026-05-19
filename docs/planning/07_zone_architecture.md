@@ -21,21 +21,6 @@ ClearedObjectsField: ForestZoneClearedObjects
 DefaultState: Locked
 ```
 
-## Состояния MVP
-
-```text
-Locked
-Active
-Empty
-```
-
-## Будущие состояния
-
-```text
-Overgrown
-Cleared
-```
-
 ## Типы объектов
 
 ```text
@@ -60,4 +45,5 @@ ForestZoneState = "Empty"
 не создавать очищенные объекты
 не запускать cooldown для очищенных объектов
 изменить визуал зоны
+удалить старые группы Active-состояния
 ```

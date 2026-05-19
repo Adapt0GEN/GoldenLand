@@ -1,174 +1,173 @@
 # 05. Next Codex Task
 
-# MVP 0.3.0 - Подготовка Набора инструментов II и каменистой зоны
+# MVP 0.2.6-fix — ForestZone Empty должен полностью очищать визуал и не получать ресурсы от ResourceService
 
 ## Контекст
 
-Продолжаем Roblox/Rojo проект GoldenLand / «Златоземье: Своя Земля».
+После выполнения MVP 0.2.6 тест показал частичный успех.
 
-Этап ForestZone завершён и протестирован:
+Фактический результат:
 
 ```text
-ToolKitLevel
-Набор инструментов I
-ForestUnlocked
-ForestZoneState
-ForestArea_01
-ForestTreeCluster.RemainingActions
-ForestStone_01.State
-ForestStone_02.State
-визуальные стадии Active / Medium / Low / Empty
-устойчивое Empty-состояние после перезапуска Play
+ForestZoneState стал Empty.
+В Output есть:
+[WorldService] Rendering ForestZone visual state: Empty
+[WorldService] Cleared old ForestZone visual state objects
+[WorldService] Created Empty ForestZone visual
+[WorldService] ForestZone state for AstartesPro: Empty
+Табличка "Лесная зона очищена" появилась.
 ```
 
-Временный DEBUG reset `ForestArea_01` убран.
-
-Следующая рекомендуемая задача должна быть небольшой и конкретной. Не нужно сразу строить большую новую главу игры.
-
----
-
-## Цель MVP 0.3.0
-
-Подготовить основу следующего слоя прогрессии:
+Проблема:
 
 ```text
-Набор инструментов II
-новая каменистая / горная зона
+визуально лесная зона очищается не полностью
+в Empty остаются лишние деревья/объекты
+в Output есть [ResourceService] Created ForestZone resources
 ```
 
-Игровой смысл:
+Вывод:
 
 ```text
-Игрок очищает ForestZone.
-После этого он получает возможность подготовить более сильные инструменты.
-Набор инструментов II должен стать ключом к будущей каменистой/горной зоне.
+WorldService создаёт Empty-визуал,
+но ResourceService всё ещё создаёт ресурсы/деревья внутри ForestZone.
 ```
 
 ---
 
-## Рекомендуемая следующая задача
+## Цель задачи
 
-### MVP 0.3.0 Step 1 - Спецификация прогрессии ToolKitLevel 2
+Исправить MVP 0.2.6 так, чтобы ForestZone в состоянии Empty визуально очищалась полностью и не получала лишние ресурсы/деревья от ResourceService.
 
-Обновить проектную документацию и минимально подготовить архитектурные правила для `ToolKitLevel = 2`, не реализуя новую механику в коде.
+---
 
-Задача на этот шаг:
+## Что проверить и исправить
 
-1. Описать условия будущего создания `Набор инструментов II`.
-2. Описать, что `ToolKitLevel = 2` будет открывать каменистую/горную зону.
-3. Зафиксировать предварительное имя новой зоны.
-4. Зафиксировать минимальные правила состояния новой зоны по аналогии с ForestZone.
-5. Обновить roadmap/changelog/decision log, если это нужно для планирования.
+### 1. ResourceService.lua
 
-Рекомендуемое рабочее имя новой зоны:
+Найти место, где создаются `ForestZone resources`.
+
+Если `ForestZoneState == "Empty"`, ResourceService не должен создавать обычные ForestZone resources внутри этой зоны.
+
+Если ResourceService не имеет доступа к профилю/состоянию зоны, лучше убрать создание ForestZone resources из ResourceService для ForestZone и оставить управление ForestZone за WorldService.
+
+Обычные стартовые ресурсы не должны сломаться.
+
+---
+
+### 2. WorldService.lua
+
+Проверить, что при Empty очищаются не только `ForestZoneVisualState`, но и старые группы:
 
 ```text
-RockyZone
+ForestZoneDecor
+ForestZoneInteractives
+ForestZoneResources
 ```
 
-Допустимые альтернативы для обсуждения:
+или любые старые объекты, созданные для Active-состояния.
+
+Empty-визуал должен создавать только:
 
 ```text
-StoneZone
-MountainZone
-RockyPass
+очищенную площадку
+тропинку
+пни / минимальный декор
+табличку "Лесная зона очищена"
+```
+
+В Empty не должно оставаться:
+
+```text
+крупных зелёных деревьев Active-состояния
+зарослей Active-состояния
+интерактивных завалов
+старых каменных куч
+респавнящихся ForestZone resources
 ```
 
 ---
 
-## Что пока не реализовывать
+### 3. Защита от дублей
 
-На этапе подготовки MVP 0.3.0 не добавлять:
+Повторный вызов UpdateForestZoneVisual / createForestZone не должен создавать дубли.
+
+При переходе Active -> Empty старые визуальные группы должны удаляться перед созданием Empty-визуала.
+
+---
+
+### 4. Логи
+
+Добавить/уточнить логи:
 
 ```text
-сытость
-усталость
-боёвку
-инвентарь
-классы персонажа
-врагов
-атаки на лагерь
-сложную экипировку
-новую большую экономику
+[ResourceService] Skipped ForestZone resources because ForestZoneState is Empty
 ```
 
-Эти системы остаются вне текущего шага. MVP 0.3.0 должен продолжать простую вертикальную прогрессию:
+или:
 
 ```text
-ресурсы -> дом/склад/мастерская -> инструменты -> новая зона
+[ResourceService] ForestZone resources are managed by WorldService; skipping
+```
+
+Также желательно:
+
+```text
+[WorldService] Removed ForestZoneDecor
+[WorldService] Removed ForestZoneInteractives
+[WorldService] Removed ForestZoneResources
+[WorldService] Created Empty ForestZone visual
 ```
 
 ---
 
-## Границы будущей реализации
-
-Когда начнётся кодовая реализация MVP 0.3.0, она должна быть маленькой:
-
-- добавить или расширить данные для `ToolKitLevel = 2`;
-- добавить рецепт `Набор инструментов II`;
-- добавить простое условие открытия новой зоны;
-- подготовить одну новую зону с минимальным набором состояний;
-- не ломать ForestZone и стартовую экономику.
-
-Предварительная структура состояния новой зоны может повторять подход ForestZone:
+## Не трогать
 
 ```text
-RockyUnlocked
-RockyZoneState
-RockyArea_01
-Active
-Empty
-```
-
-На первом кодовом шаге не нужно делать полноценную горную главу. Достаточно подготовить маленькую, проверяемую основу.
-
----
-
-## Файлы для изучения перед будущей реализацией
-
-```text
-docs/05_current_state.md
-docs/planning/01_roadmap.md
-docs/planning/03_decisions_log.md
-docs/planning/06_changelog.md
-docs/planning/07_zone_architecture.md
-docs/planning/08_resource_rules.md
-docs/planning/09_visual_progression_rules.md
-
-src/ServerScriptService/Services/PlayerDataService.lua
-src/ServerScriptService/Services/WorldService.lua
-src/ServerScriptService/Services/PlotService.lua
-src/ServerScriptService/ServerMain.server.lua
-```
-
-Код менять только в отдельной будущей задаче. Текущая задача после ForestZone - документационная подготовка направления MVP 0.3.0.
-
----
-
-## Не трогать в следующем маленьком шаге
-
-```text
-src/Workspace
 default.project.json
+src/Workspace
 Rojo mapping
 настройки персонажа/R15/R6
-боёвку
-инвентарь
-сытость
-усталость
-классы
+дом
+склад
+мастерскую
+ToolKitLevel
+квест first_steps
+обычные стартовые ресурсы
+системы сытости и усталости
+систему Мрака
+питомцев
+гильдии
+боевые классы
 ```
 
 ---
 
-## Критерий готовности следующей задачи
+## Ожидаемый ответ Codex
 
-Задача считается выполненной, если:
+В конце покажи:
 
 ```text
-понятно, зачем нужен Набор инструментов II
-понятно, какую зону он откроет
-выбрано или предложено имя новой зоны
-описаны минимальные состояния новой зоны
-зафиксировано, что survival-системы, боёвка, инвентарь и классы пока не входят в MVP 0.3.0
+1. список изменённых файлов
+2. почему ResourceService создавал лишние объекты
+3. как теперь Empty очищает старый визуал
+4. как тестировать
+5. какие строки должны быть в Output
 ```
+
+---
+
+## Тест
+
+1. Запустить Play.
+2. Перейти к ForestZone.
+3. Добиться `ForestZoneState = Empty`.
+4. Проверить, что визуально зона очищена полностью.
+5. Убедиться, что нет крупных зелёных деревьев/зарослей Active-состояния.
+6. Убедиться, что нет интерактивных объектов Active-состояния.
+7. Подождать 10–20 секунд.
+8. Убедиться, что лишние ForestZone resources не появляются.
+9. Перезапустить Play.
+10. Проверить, что Empty-визуал восстановился.
+11. Проверить, что стартовые дерево/камень/металл/золото работают.
+12. Проверить, что дом, склад, мастерская и ToolKitLevel не сломались.

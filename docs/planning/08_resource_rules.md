@@ -35,3 +35,9 @@ CurrencyService.AddStone(player, 1)
 CurrencyService.AddMetal(player, 1)
 CurrencyService.AddGold(player, 1)
 ```
+
+## ForestZone
+
+ForestZone не должна одновременно управляться WorldService и ResourceService без явного правила.
+
+Если ForestZoneState == Empty, ResourceService не должен создавать там обычные ресурсы Active-состояния.
