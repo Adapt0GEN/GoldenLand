@@ -3,7 +3,6 @@
 
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 
 local PlayerDataService = require(script.Parent.PlayerDataService)
 local ResourceService = require(script.Parent.ResourceService)
@@ -13,7 +12,11 @@ local WorldService = {}
 local WORLD_ROOT_NAME = "WorldRoot"
 local BLOCKED_PATH_NAME = "BlockedPathToForest"
 local FOREST_ZONE_NAME = "ForestZone"
+local FOREST_ZONE_DECOR_FOLDER_NAME = "ForestZoneDecor"
+local FOREST_ZONE_INTERACTIVES_FOLDER_NAME = "ForestZoneInteractives"
 local FOREST_ZONE_RESOURCES_FOLDER_NAME = "ForestZoneResources"
+local FOREST_ZONE_VISUAL_STATE_FOLDER_NAME = "VisualStateObjects"
+local LEGACY_FOREST_ZONE_VISUAL_STATE_FOLDER_NAME = "ForestZoneVisualState"
 local FOREST_AREA_ID = "ForestArea_01"
 local BLOCKED_PATH_POSITION = Vector3.new(-14, 1.1, 8)
 local FOREST_ZONE_POSITION = Vector3.new(-38, 0.05, 8)
@@ -299,6 +302,202 @@ local function ensureForestZoneResourcesFolder(forestZone)
 	return forestResources
 end
 
+local function ensureChildFolder(parent, folderName)
+	local folder = parent:FindFirstChild(folderName)
+
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = folderName
+		folder.Parent = parent
+	end
+
+	return folder
+end
+
+local function removeLegacyForestZoneVisualObjects(forestZone)
+	for _, child in ipairs(forestZone:GetChildren()) do
+		if child.Name == "ForestZoneSign"
+			or child.Name == "ForestDecorStone_1"
+			or child.Name == "ForestDecorStone_2"
+			or child.Name == FOREST_ZONE_DECOR_FOLDER_NAME
+			or child.Name == FOREST_ZONE_INTERACTIVES_FOLDER_NAME
+			or child.Name == LEGACY_FOREST_ZONE_VISUAL_STATE_FOLDER_NAME
+		then
+			child:Destroy()
+		end
+	end
+end
+
+local function createBush(name, position, parent)
+	local bush = createPart(
+		name,
+		Vector3.new(3.2, 1.6, 3.2),
+		position + Vector3.new(0, 0.8, 0),
+		Color3.fromRGB(45, 125, 55),
+		parent
+	)
+	bush.Shape = Enum.PartType.Ball
+	bush.Material = Enum.Material.Grass
+
+	return bush
+end
+
+local function createFlatMarker(name, size, position, color, parent)
+	local marker = createPart(name, size, position, color, parent)
+	marker.Material = Enum.Material.Ground
+	marker.CanCollide = false
+	marker.CanTouch = false
+
+	return marker
+end
+
+local function clearForestZoneVisualState(forestZone)
+	local legacyVisualState = forestZone:FindFirstChild(LEGACY_FOREST_ZONE_VISUAL_STATE_FOLDER_NAME)
+
+	if legacyVisualState then
+		legacyVisualState:Destroy()
+	end
+
+	local oldVisualState = forestZone:FindFirstChild(FOREST_ZONE_VISUAL_STATE_FOLDER_NAME)
+
+	if oldVisualState then
+		oldVisualState:Destroy()
+		print("[WorldService] Destroyed old ForestZone VisualStateObjects")
+	end
+
+	local visualState = Instance.new("Folder")
+	visualState.Name = FOREST_ZONE_VISUAL_STATE_FOLDER_NAME
+	visualState.Parent = forestZone
+
+	return visualState
+end
+
+local function createForestAreaStageVisual(parent, stageName, treeCount)
+	local stage = Instance.new("Model")
+	stage.Name = string.format("%s_%s", FOREST_AREA_ID, stageName)
+	stage.Parent = parent
+
+	for index = 1, treeCount do
+		createDecorativeTree(string.format("Tree_%d", index), FOREST_AREA_TREE_POSITIONS[index], stage)
+	end
+
+	if stageName == "Low" or stageName == "TreeEmpty" then
+		createStump("Stump_1", FOREST_AREA_POSITION + Vector3.new(-8, 0, -5), stage)
+		createStump("Stump_2", FOREST_AREA_POSITION + Vector3.new(-4, 0, 4), stage)
+	end
+
+	return stage
+end
+
+local function createActiveForestZoneVisual(visualState, visualStage, treeCount)
+	local decor = ensureChildFolder(visualState, FOREST_ZONE_DECOR_FOLDER_NAME)
+	local interactives = ensureChildFolder(visualState, FOREST_ZONE_INTERACTIVES_FOLDER_NAME)
+	local stageName = visualStage or "Full"
+	local visualTreeCount = treeCount or 6
+
+	createFlatMarker(
+		"ActiveForestOvergrowth",
+		Vector3.new(30, 0.12, 20),
+		FOREST_ZONE_POSITION + Vector3.new(0, 0.25, 1),
+		Color3.fromRGB(45, 115, 55),
+		decor
+	)
+
+	createForestAreaStageVisual(decor, stageName, visualTreeCount)
+	createBush("ActiveBush_1", FOREST_ZONE_POSITION + Vector3.new(-6, 0, -9), decor)
+	createBush("ActiveBush_2", FOREST_ZONE_POSITION + Vector3.new(6, 0, -8), decor)
+	createBush("ActiveBush_3", FOREST_ZONE_POSITION + Vector3.new(-2, 0, 9), decor)
+	createBush("ActiveBush_4", FOREST_ZONE_POSITION + Vector3.new(8, 0, 0), decor)
+	createDecorativeStone("ActiveDecorStone_1", FOREST_ZONE_POSITION + Vector3.new(-12, 1.1, 5), decor)
+	createDecorativeStone("ActiveDecorStone_2", FOREST_ZONE_POSITION + Vector3.new(12, 1.1, -6), decor)
+	createLog("ActiveBlockedLog_1", FOREST_ZONE_POSITION + Vector3.new(-5, 0, 3), interactives)
+	createLog("ActiveBlockedLog_2", FOREST_ZONE_POSITION + Vector3.new(5, 0, -2), interactives)
+	createTextSign("ForestZoneActiveSign", "Лесная зона", FOREST_ZONE_POSITION + Vector3.new(0, 2.5, -13), visualState)
+
+	if stageName == "Medium" then
+		print(string.format("[WorldService] Medium visual created with %d trees", visualTreeCount))
+	elseif stageName == "Low" or stageName == "TreeEmpty" then
+		print(string.format("[WorldService] Low visual created with %d trees", visualTreeCount))
+	else
+		print(string.format("[WorldService] Active visual created with %d trees", visualTreeCount))
+	end
+end
+
+local function createEmptyForestZoneVisual(visualState)
+	local decor = ensureChildFolder(visualState, FOREST_ZONE_DECOR_FOLDER_NAME)
+
+	createFlatMarker(
+		"ClearedForestGround",
+		Vector3.new(22, 0.14, 15),
+		FOREST_ZONE_POSITION + Vector3.new(0, 0.28, 1),
+		Color3.fromRGB(130, 155, 95),
+		decor
+	)
+	createFlatMarker(
+		"ClearedForestPath",
+		Vector3.new(5, 0.16, 24),
+		FOREST_ZONE_POSITION + Vector3.new(0, 0.32, -1),
+		Color3.fromRGB(170, 145, 95),
+		decor
+	)
+
+	createStump("EmptyStump_1", FOREST_ZONE_POSITION + Vector3.new(-6, 0, 4), decor)
+	createStump("EmptyStump_2", FOREST_ZONE_POSITION + Vector3.new(4, 0, -3), decor)
+	createStump("EmptyStump_3", FOREST_ZONE_POSITION + Vector3.new(8, 0, 6), decor)
+	createLog("EmptyFallenLog_1", FOREST_ZONE_POSITION + Vector3.new(-8, 0, -5), decor)
+	createTextSign("ForestZoneEmptySign", "Лесная зона очищена", FOREST_ZONE_POSITION + Vector3.new(0, 2.5, -13), visualState)
+
+	print("[WorldService] Empty visual created with 0 trees")
+end
+
+local function createClearedForestZoneVisual(visualState)
+	local decor = ensureChildFolder(visualState, FOREST_ZONE_DECOR_FOLDER_NAME)
+
+	createFlatMarker(
+		"SettledForestGround",
+		Vector3.new(24, 0.14, 16),
+		FOREST_ZONE_POSITION + Vector3.new(0, 0.3, 1),
+		Color3.fromRGB(150, 170, 105),
+		decor
+	)
+	createFlatMarker(
+		"FutureForestBuildSpot",
+		Vector3.new(8, 0.18, 6),
+		FOREST_ZONE_POSITION + Vector3.new(0, 0.36, 3),
+		Color3.fromRGB(185, 165, 115),
+		decor
+	)
+	createFlatMarker(
+		"ClearedForestPath",
+		Vector3.new(5, 0.16, 24),
+		FOREST_ZONE_POSITION + Vector3.new(0, 0.34, -1),
+		Color3.fromRGB(175, 150, 100),
+		decor
+	)
+	createStump("ClearedStump_1", FOREST_ZONE_POSITION + Vector3.new(-9, 0, 5), decor)
+	createStump("ClearedStump_2", FOREST_ZONE_POSITION + Vector3.new(9, 0, -5), decor)
+	createTextSign("ForestZoneClearedSign", "Лесная зона освоена", FOREST_ZONE_POSITION + Vector3.new(0, 2.5, -13), visualState)
+
+	print("[WorldService] Created Cleared ForestZone visual")
+end
+
+local function createForestZoneVisualForState(forestZone, state, visualStage, treeCount)
+	local visualState = clearForestZoneVisualState(forestZone)
+	local visualStateName = state or "Active"
+
+	print(string.format("[WorldService] Rendering ForestZone visual state: %s", visualStateName))
+
+	if visualStateName == "Empty" then
+		createEmptyForestZoneVisual(visualState)
+	elseif visualStateName == "Cleared" then
+		createClearedForestZoneVisual(visualState)
+	else
+		createActiveForestZoneVisual(visualState, visualStage, treeCount)
+	end
+
+	print(string.format("[WorldService] Created ForestZone VisualStateObjects for state: %s", visualStateName))
+end
+
 local function getForestZoneState(profile)
 	if profile.ForestUnlocked ~= true then
 		return "Locked"
@@ -311,7 +510,7 @@ local function getForestZoneState(profile)
 	return "Active"
 end
 
-local function createForestAreaStage(parent, stageName, treeCount)
+local function createLegacyForestAreaStage(parent, stageName, treeCount)
 	local stage = Instance.new("Model")
 	stage.Name = string.format("%s_%s", FOREST_AREA_ID, stageName)
 	stage.Parent = parent
@@ -359,7 +558,7 @@ local function createForestAreaStage(parent, stageName, treeCount)
 	return stage
 end
 
-local function createForestAreaVisual(forestResources, visualStage, treeCount)
+local function createForestAreaVisual(forestResources)
 	local forestArea = forestResources:FindFirstChild(FOREST_AREA_ID)
 
 	if not forestArea then
@@ -375,8 +574,6 @@ local function createForestAreaVisual(forestResources, visualStage, treeCount)
 			existingStage:Destroy()
 		end
 	end
-
-	createForestAreaStage(forestArea, visualStage or "Full", treeCount or 6)
 
 	local promptPart = forestArea:FindFirstChild("GatherForestAreaPromptPart")
 
@@ -428,56 +625,16 @@ local function createForestAreaVisual(forestResources, visualStage, treeCount)
 	prompt.MaxActivationDistance = 12
 	prompt.RequiresLineOfSight = false
 
-	if RunService:IsStudio() then
-		local debugPromptPart = forestArea:FindFirstChild("DebugResetForestPromptPart")
+	local debugPromptPart = forestArea:FindFirstChild("DebugResetForestPromptPart")
 
-		if not debugPromptPart then
-			debugPromptPart = createPart(
-				"DebugResetForestPromptPart",
-				Vector3.new(3, 1.5, 0.5),
-				FOREST_AREA_POSITION + Vector3.new(9, 1.4, 8),
-				Color3.fromRGB(180, 80, 80),
-				forestArea
-			)
-			debugPromptPart.Transparency = 0.35
-			debugPromptPart.CanCollide = false
-			debugPromptPart.CanTouch = false
-		end
+	if debugPromptPart then
+		debugPromptPart:Destroy()
+	end
 
-		local legacyDebugPromptPart = forestArea:FindFirstChild("DebugResetForestAreaPromptPart")
+	local legacyDebugPromptPart = forestArea:FindFirstChild("DebugResetForestAreaPromptPart")
 
-		if legacyDebugPromptPart and legacyDebugPromptPart ~= debugPromptPart then
-			legacyDebugPromptPart:Destroy()
-		end
-
-		local legacyDebugPrompt = debugPromptPart:FindFirstChild("DebugResetForestAreaPrompt")
-
-		if legacyDebugPrompt then
-			legacyDebugPrompt:Destroy()
-		end
-
-		local debugPrompt = debugPromptPart:FindFirstChild("DebugResetForestPrompt")
-
-		if not debugPrompt then
-			debugPrompt = Instance.new("ProximityPrompt")
-			debugPrompt.Name = "DebugResetForestPrompt"
-			debugPrompt.ObjectText = "DEBUG ForestArea_01"
-			debugPrompt.ActionText = "Reset Forest"
-			debugPrompt.HoldDuration = 0.3
-			debugPrompt.MaxActivationDistance = 10
-			debugPrompt.RequiresLineOfSight = false
-			debugPrompt.Parent = debugPromptPart
-
-			debugPrompt.Triggered:Connect(function(player)
-				ResourceService.ResetResourceZoneForDebug(player, FOREST_AREA_ID)
-			end)
-		end
-
-		debugPrompt.ObjectText = "DEBUG ForestArea_01"
-		debugPrompt.ActionText = "Reset Forest"
-		debugPrompt.HoldDuration = 0.3
-		debugPrompt.MaxActivationDistance = 10
-		debugPrompt.RequiresLineOfSight = false
+	if legacyDebugPromptPart then
+		legacyDebugPromptPart:Destroy()
 	end
 
 	return forestArea
@@ -489,7 +646,9 @@ local function createForestZone(state)
 
 	if existingForestZone then
 		removeLegacyForestZoneTrees(existingForestZone)
+		removeLegacyForestZoneVisualObjects(existingForestZone)
 		createForestAreaVisual(ensureForestZoneResourcesFolder(existingForestZone))
+		createForestZoneVisualForState(existingForestZone, state or "Active")
 		print(string.format("[WorldService] Created ForestZone with state %s", state or "Active"))
 		return existingForestZone
 	end
@@ -506,11 +665,8 @@ local function createForestZone(state)
 		forestZone
 	)
 
-	createDecorativeStone("ForestDecorStone_1", FOREST_ZONE_POSITION + Vector3.new(-12, 1.1, 5), forestZone)
-	createDecorativeStone("ForestDecorStone_2", FOREST_ZONE_POSITION + Vector3.new(12, 1.1, -6), forestZone)
-
-	createTextSign("ForestZoneSign", "Лесная зона", FOREST_ZONE_POSITION + Vector3.new(0, 2.5, -13), forestZone)
 	createForestAreaVisual(ensureForestZoneResourcesFolder(forestZone))
+	createForestZoneVisualForState(forestZone, state or "Active")
 
 	print(string.format("[WorldService] Created ForestZone with state %s", state or "Active"))
 	return forestZone
@@ -712,7 +868,9 @@ function WorldService.UpdateForestAreaVisual(player)
 	local resourceZones = profile.ResourceZones or {}
 	local forestAreaData = resourceZones[FOREST_AREA_ID] or {}
 	local visualStage, treeCount = getForestAreaVisualStage(forestAreaData)
-	local forestArea = createForestAreaVisual(forestResources, visualStage, treeCount)
+	createForestZoneVisualForState(forestZone, profile.ForestZoneState, visualStage, treeCount)
+
+	local forestArea = createForestAreaVisual(forestResources)
 	local objects = forestAreaData.Objects or {}
 	local treeCluster = objects.ForestTreeCluster or {}
 
@@ -722,14 +880,17 @@ function WorldService.UpdateForestAreaVisual(player)
 		prompt.Enabled = forestAreaData.State == "Active"
 			and treeCluster.State == "Active"
 			and (treeCluster.RemainingActions or 0) > 0
+
+		local promptPart = prompt.Parent
+
+		if promptPart and promptPart:IsA("BasePart") then
+			promptPart.Transparency = if prompt.Enabled then 0.65 else 1
+			promptPart.CanQuery = prompt.Enabled
+		end
 	end
 
 	updateForestStoneVisuals(forestResources, forestAreaData)
 	print(string.format("[WorldService] ForestArea_01 visual stage: %s, trees=%d", visualStage, treeCount))
-
-	if profile.ForestZoneState == "Empty" then
-		print("[WorldService] Created Empty ForestZone visual")
-	end
 
 	return true
 end

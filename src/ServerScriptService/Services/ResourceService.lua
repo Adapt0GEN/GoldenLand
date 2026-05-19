@@ -2,7 +2,6 @@
 -- Создаёт простые деревья, камни, металлическую руду и золотую жилу, которые можно собирать повторяемо.
 
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
 
 local PlayerDataService = require(script.Parent.PlayerDataService)
 local QuestService = require(script.Parent.QuestService)
@@ -21,7 +20,6 @@ local FOREST_ZONE_RESOURCES_FOLDER_NAME = "ForestZoneResources"
 local FOREST_AREA_ID = "ForestArea_01"
 local FOREST_AREA_DEFAULT_REMAINING_ACTIONS = 12
 local FOREST_AREA_DEBOUNCE_SECONDS = 0.6
-local FOREST_AREA_DEBUG_RESET_DEBOUNCE_SECONDS = 1
 local FOREST_TREE_CLUSTER_ID = "ForestTreeCluster"
 local FOREST_STONE_OBJECT_IDS = {
 	"ForestStone_01",
@@ -53,7 +51,6 @@ local FOREST_STONE_POSITIONS = {
 }
 local goldMineCooldownsByUserId = {}
 local forestAreaHarvestCooldownsByUserId = {}
-local forestAreaDebugResetCooldownsByUserId = {}
 
 local function createPart(name, size, position, color, parent)
 	local part = Instance.new("Part")
@@ -416,18 +413,6 @@ local function canHarvestForestArea(player)
 	end
 
 	forestAreaHarvestCooldownsByUserId[player.UserId] = now
-	return true
-end
-
-local function canDebugResetForestArea(player)
-	local now = os.clock()
-	local lastResetAt = forestAreaDebugResetCooldownsByUserId[player.UserId]
-
-	if lastResetAt and now - lastResetAt < FOREST_AREA_DEBUG_RESET_DEBOUNCE_SECONDS then
-		return false
-	end
-
-	forestAreaDebugResetCooldownsByUserId[player.UserId] = now
 	return true
 end
 
@@ -807,46 +792,6 @@ function ResourceService.HarvestForestArea(player)
 
 	PlayerDataService.MarkDirty(player)
 	updateForestAreaLocationState(player, profile)
-
-	local WorldService = require(script.Parent.WorldService)
-	WorldService.UpdateForestAreaVisual(player)
-
-	if PlayerDataService.SendProfileUpdate then
-		PlayerDataService.SendProfileUpdate(player)
-	end
-
-	return true
-end
-
-function ResourceService.ResetResourceZoneForDebug(player, resourceZoneId)
-	if not RunService:IsStudio() then
-		return false
-	end
-
-	if resourceZoneId ~= FOREST_AREA_ID then
-		warn(string.format("[ResourceService] DEBUG reset rejected for unknown resource zone: %s", tostring(resourceZoneId)))
-		return false
-	end
-
-	if not canDebugResetForestArea(player) then
-		return false
-	end
-
-	local profile = PlayerDataService.GetProfile(player)
-
-	if not profile then
-		warn(string.format("[ResourceService] Profile for %s was not found. Debug reset was not applied.", player.Name))
-		return false
-	end
-
-	profile.ResourceZones = profile.ResourceZones or {}
-	profile.ResourceZones[FOREST_AREA_ID] = createDefaultForestAreaZone()
-	profile.ForestZoneState = "Active"
-	profile.ForestZoneClearedObjects = {}
-	PlayerDataService.MarkDirty(player)
-	forestAreaHarvestCooldownsByUserId[player.UserId] = nil
-
-	print(string.format("[ResourceService] DEBUG reset ForestArea_01 location for %s", player.Name))
 
 	local WorldService = require(script.Parent.WorldService)
 	WorldService.UpdateForestAreaVisual(player)
