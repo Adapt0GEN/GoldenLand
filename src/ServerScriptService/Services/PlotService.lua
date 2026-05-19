@@ -33,6 +33,13 @@ local TOOL_KIT_I_COST = {
 	Metal = 5,
 }
 
+local TOOL_KIT_II_COST = {
+	Gold = 10,
+	Wood = 25,
+	Stone = 20,
+	Metal = 15,
+}
+
 local TOOL_KIT_RESOURCE_LABELS = {
 	Gold = "золото",
 	Wood = "дерево",
@@ -183,6 +190,17 @@ local function removeToolKitCraftPrompt(workshop)
 	end
 end
 
+local function getToolKitPromptActionText(player)
+	local profile = PlayerDataService.GetProfile(player)
+	local toolKitLevel = if profile then profile.ToolKitLevel or 0 else 0
+
+	if toolKitLevel == 1 then
+		return "Улучшить инструменты II"
+	end
+
+	return "Изготовить инструменты I"
+end
+
 local function addToolKitCraftPrompt(player, workshop)
 	local promptPart = workshop:FindFirstChild("WorkshopBody")
 
@@ -194,13 +212,14 @@ local function addToolKitCraftPrompt(player, workshop)
 	local existingPrompt = promptPart:FindFirstChild("CraftToolKitPrompt")
 
 	if existingPrompt then
+		existingPrompt.ActionText = getToolKitPromptActionText(player)
 		return existingPrompt
 	end
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "CraftToolKitPrompt"
 	prompt.ObjectText = "Мастерская"
-	prompt.ActionText = "Изготовить инструменты"
+	prompt.ActionText = getToolKitPromptActionText(player)
 	prompt.HoldDuration = 0.7
 	prompt.MaxActivationDistance = 12
 	prompt.RequiresLineOfSight = false
@@ -768,7 +787,7 @@ local function updateWorkshopVisual(player, profile)
 		print(string.format("[PlotService] Workshop already built for %s. Restoring visual.", player.Name))
 		local workshop = createWorkshopBuilding(player, plotModel)
 
-		if (profile.ToolKitLevel or 0) < 1 then
+		if (profile.ToolKitLevel or 0) < 2 then
 			addToolKitCraftPrompt(player, workshop)
 		else
 			removeToolKitCraftPrompt(workshop)
@@ -1067,44 +1086,58 @@ function PlotService.CanCraftToolKit(player)
 		return false, "мастерская не построена"
 	end
 
-	if (profile.ToolKitLevel or 0) >= 1 then
+	local currentToolKitLevel = profile.ToolKitLevel or 0
+	local nextToolKitLevel = currentToolKitLevel + 1
+	local cost = nil
+
+	if currentToolKitLevel == 0 then
+		cost = TOOL_KIT_I_COST
+	elseif currentToolKitLevel == 1 then
+		cost = TOOL_KIT_II_COST
+	else
 		return false, "набор инструментов уже изготовлен"
 	end
 
 	local missingResources = {}
 	local missingResourceMessages = {}
 
-	if profile.Gold < TOOL_KIT_I_COST.Gold then
-		table.insert(missingResources, string.format("Gold %d/%d", profile.Gold, TOOL_KIT_I_COST.Gold))
-		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Gold, profile.Gold, TOOL_KIT_I_COST.Gold))
+	if profile.Gold < cost.Gold then
+		table.insert(missingResources, string.format("Gold %d/%d", profile.Gold, cost.Gold))
+		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Gold, profile.Gold, cost.Gold))
 	end
 
-	if profile.Wood < TOOL_KIT_I_COST.Wood then
-		table.insert(missingResources, string.format("Wood %d/%d", profile.Wood, TOOL_KIT_I_COST.Wood))
-		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Wood, profile.Wood, TOOL_KIT_I_COST.Wood))
+	if profile.Wood < cost.Wood then
+		table.insert(missingResources, string.format("Wood %d/%d", profile.Wood, cost.Wood))
+		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Wood, profile.Wood, cost.Wood))
 	end
 
-	if profile.Stone < TOOL_KIT_I_COST.Stone then
-		table.insert(missingResources, string.format("Stone %d/%d", profile.Stone, TOOL_KIT_I_COST.Stone))
-		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Stone, profile.Stone, TOOL_KIT_I_COST.Stone))
+	if profile.Stone < cost.Stone then
+		table.insert(missingResources, string.format("Stone %d/%d", profile.Stone, cost.Stone))
+		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Stone, profile.Stone, cost.Stone))
 	end
 
-	if profile.Metal < TOOL_KIT_I_COST.Metal then
-		table.insert(missingResources, string.format("Metal %d/%d", profile.Metal, TOOL_KIT_I_COST.Metal))
-		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Metal, profile.Metal, TOOL_KIT_I_COST.Metal))
+	if profile.Metal < cost.Metal then
+		table.insert(missingResources, string.format("Metal %d/%d", profile.Metal, cost.Metal))
+		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Metal, profile.Metal, cost.Metal))
 	end
 
 	if #missingResources > 0 then
-		return false, "не хватает ресурсов: " .. table.concat(missingResources, ", "), TOOL_KIT_I_COST, "Не хватает: " .. table.concat(missingResourceMessages, ", ")
+		local message = "Не хватает: " .. table.concat(missingResourceMessages, ", ")
+
+		if nextToolKitLevel == 2 then
+			message = "Недостаточно ресурсов для улучшения инструментов II"
+		end
+
+		return false, "не хватает ресурсов: " .. table.concat(missingResources, ", "), cost, message
 	end
 
-	return true, "можно изготовить", TOOL_KIT_I_COST
+	return true, "можно изготовить", cost, nil, nextToolKitLevel
 end
 
 function PlotService.TryCraftToolKit(player)
 	print(string.format("[PlotService] %s tried to craft tool kit.", player.Name))
 
-	local canCraft, reason, cost, playerMessage = PlotService.CanCraftToolKit(player)
+	local canCraft, reason, cost, playerMessage, nextToolKitLevel = PlotService.CanCraftToolKit(player)
 
 	if not canCraft then
 		if reason == "профиль не найден" then
@@ -1138,7 +1171,7 @@ function PlotService.TryCraftToolKit(player)
 		return false
 	end
 
-	profile.ToolKitLevel = 1
+	profile.ToolKitLevel = nextToolKitLevel
 	PlayerDataService.MarkDirty(player)
 	updateWorkshopVisual(player, profile)
 
@@ -1150,8 +1183,13 @@ function PlotService.TryCraftToolKit(player)
 		PlayerDataService.SaveProfile(player)
 	end
 
-	sendPlayerMessage(player, "Набор инструментов I изготовлен")
-	print(string.format("[PlotService] %s crafted ToolKitLevel 1.", player.Name))
+	if nextToolKitLevel == 2 then
+		sendPlayerMessage(player, "Набор инструментов II создан")
+	else
+		sendPlayerMessage(player, "Набор инструментов I изготовлен")
+	end
+
+	print(string.format("[PlotService] %s crafted ToolKitLevel %d.", player.Name, nextToolKitLevel))
 
 	return true
 end
