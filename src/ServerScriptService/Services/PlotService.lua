@@ -40,13 +40,6 @@ local TOOL_KIT_II_COST = {
 	Metal = 15,
 }
 
-local TOOL_KIT_RESOURCE_LABELS = {
-	Gold = "золото",
-	Wood = "дерево",
-	Stone = "камень",
-	Metal = "металл",
-}
-
 local HOUSE_UPGRADE_COSTS = {
 	[1] = {
 		Gold = 25,
@@ -111,11 +104,7 @@ local function getUpgradeCost(houseLevel)
 end
 
 local function formatCost(cost)
-	if not cost then
-		return "нет стоимости"
-	end
-
-	return string.format("%d Gold, %d Wood, %d Stone", cost.Gold, cost.Wood, cost.Stone)
+	return CurrencyService.FormatCost(cost)
 end
 
 local function addHouseUpgradePrompt(promptPart)
@@ -1098,37 +1087,12 @@ function PlotService.CanCraftToolKit(player)
 		return false, "набор инструментов уже изготовлен"
 	end
 
-	local missingResources = {}
-	local missingResourceMessages = {}
+	if not CurrencyService.CanAfford(player, cost) then
+		local actionText = if nextToolKitLevel == 2 then "улучшения инструментов II" else "создания инструментов I"
+		local missingResourcesMessage = CurrencyService.FormatMissingResources(player, cost)
+		local message = string.format("Недостаточно ресурсов для %s. %s", actionText, missingResourcesMessage)
 
-	if profile.Gold < cost.Gold then
-		table.insert(missingResources, string.format("Gold %d/%d", profile.Gold, cost.Gold))
-		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Gold, profile.Gold, cost.Gold))
-	end
-
-	if profile.Wood < cost.Wood then
-		table.insert(missingResources, string.format("Wood %d/%d", profile.Wood, cost.Wood))
-		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Wood, profile.Wood, cost.Wood))
-	end
-
-	if profile.Stone < cost.Stone then
-		table.insert(missingResources, string.format("Stone %d/%d", profile.Stone, cost.Stone))
-		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Stone, profile.Stone, cost.Stone))
-	end
-
-	if profile.Metal < cost.Metal then
-		table.insert(missingResources, string.format("Metal %d/%d", profile.Metal, cost.Metal))
-		table.insert(missingResourceMessages, string.format("%s %d/%d", TOOL_KIT_RESOURCE_LABELS.Metal, profile.Metal, cost.Metal))
-	end
-
-	if #missingResources > 0 then
-		local message = "Не хватает: " .. table.concat(missingResourceMessages, ", ")
-
-		if nextToolKitLevel == 2 then
-			message = "Недостаточно ресурсов для улучшения инструментов II"
-		end
-
-		return false, "не хватает ресурсов: " .. table.concat(missingResources, ", "), cost, message
+		return false, "не хватает ресурсов", cost, message
 	end
 
 	return true, "можно изготовить", cost, nil, nextToolKitLevel
@@ -1166,8 +1130,15 @@ function PlotService.TryCraftToolKit(player)
 		return false
 	end
 
-	if not CurrencyService.SpendResources(player, cost) then
-		sendPlayerMessage(player, "Не удалось списать ресурсы для набора инструментов")
+	local resourcesSpent, missingResourcesMessage = CurrencyService.SpendResources(player, cost)
+
+	if not resourcesSpent then
+		local actionText = if nextToolKitLevel == 2 then "улучшения инструментов II" else "создания инструментов I"
+		local message = if missingResourcesMessage
+			then string.format("Недостаточно ресурсов для %s. %s", actionText, missingResourcesMessage)
+			else "Не удалось списать ресурсы для набора инструментов"
+
+		sendPlayerMessage(player, message)
 		return false
 	end
 
@@ -1217,29 +1188,16 @@ function PlotService.CanUpgradeHouse(player)
 		return false, "стоимость улучшения не найдена"
 	end
 
-	local missingResources = {}
-
-	if profile.Gold < cost.Gold then
-		table.insert(missingResources, string.format("Gold %d/%d", profile.Gold, cost.Gold))
-	end
-
-	if profile.Wood < cost.Wood then
-		table.insert(missingResources, string.format("Wood %d/%d", profile.Wood, cost.Wood))
-	end
-
-	if profile.Stone < cost.Stone then
-		table.insert(missingResources, string.format("Stone %d/%d", profile.Stone, cost.Stone))
-	end
-
-	if #missingResources > 0 then
-		return false, "не хватает ресурсов: " .. table.concat(missingResources, ", "), cost
+	if not CurrencyService.CanAfford(player, cost) then
+		local missingResourcesMessage = CurrencyService.FormatMissingResources(player, cost)
+		return false, "не хватает ресурсов", cost, missingResourcesMessage
 	end
 
 	return true, "можно улучшить", cost
 end
 
 function PlotService.TryUpgradeHouse(player)
-	local canUpgrade, reason, cost = PlotService.CanUpgradeHouse(player)
+	local canUpgrade, reason, cost, missingResourcesMessage = PlotService.CanUpgradeHouse(player)
 
 	if not canUpgrade then
 		local playerMessage = "Дом нельзя улучшить"
@@ -1248,7 +1206,10 @@ function PlotService.TryUpgradeHouse(player)
 			playerMessage = "Дом уже улучшен до максимума"
 			print(string.format("[PlotService] %s tried to upgrade house, but %s.", player.Name, reason))
 		elseif string.find(reason, "не хватает ресурсов", 1, true) then
-			playerMessage = "Недостаточно ресурсов для улучшения дома"
+			playerMessage = string.format(
+				"Недостаточно ресурсов для улучшения дома. %s",
+				missingResourcesMessage or CurrencyService.FormatMissingResources(player, cost)
+			)
 			warn(string.format("[PlotService] %s cannot upgrade house: %s.", player.Name, reason))
 		else
 			warn(string.format("[PlotService] %s cannot upgrade house: %s.", player.Name, reason))
@@ -1261,8 +1222,14 @@ function PlotService.TryUpgradeHouse(player)
 	local profile = PlayerDataService.GetProfile(player)
 	local oldLevel = profile.HouseLevel
 
-	if not CurrencyService.SpendResources(player, cost) then
-		sendPlayerMessage(player, "Не удалось списать ресурсы для улучшения дома")
+	local resourcesSpent, spendMissingResourcesMessage = CurrencyService.SpendResources(player, cost)
+
+	if not resourcesSpent then
+		local message = if spendMissingResourcesMessage
+			then string.format("Недостаточно ресурсов для улучшения дома. %s", spendMissingResourcesMessage)
+			else "Не удалось списать ресурсы для улучшения дома"
+
+		sendPlayerMessage(player, message)
 		return false
 	end
 
