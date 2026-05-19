@@ -321,6 +321,22 @@ local function isForestObjectActive(resourceObject)
 		and (resourceObject.RemainingActions or 0) > 0
 end
 
+local function syncForestZoneClearedObject(profile, objectId, resourceObject)
+	profile.ForestZoneClearedObjects = profile.ForestZoneClearedObjects or {}
+
+	if type(resourceObject) == "table"
+		and (resourceObject.State == "Empty" or (resourceObject.RemainingActions or 0) <= 0)
+	then
+		profile.ForestZoneClearedObjects[objectId] = true
+	end
+end
+
+local function syncForestZoneClearedObjects(profile, forestZone)
+	for objectId, resourceObject in pairs(forestZone.Objects or {}) do
+		syncForestZoneClearedObject(profile, objectId, resourceObject)
+	end
+end
+
 local function ensureForestAreaZone(profile)
 	profile.ResourceZones = profile.ResourceZones or {}
 
@@ -363,6 +379,7 @@ local function updateForestAreaLocationState(player, profile)
 
 	local forestZone = ensureForestAreaZone(profile)
 	local previousState = forestZone.State
+	local previousForestZoneState = profile.ForestZoneState
 	local hasActiveObject = false
 
 	for _, resourceObject in pairs(forestZone.Objects) do
@@ -374,12 +391,19 @@ local function updateForestAreaLocationState(player, profile)
 
 	forestZone.State = if hasActiveObject then "Active" else "Empty"
 	forestZone.RemainingActions = forestZone.Objects.ForestTreeCluster.RemainingActions or 0
+	syncForestZoneClearedObjects(profile, forestZone)
+	profile.ForestZoneState = if profile.ForestUnlocked == true then forestZone.State else "Locked"
 
-	if forestZone.State ~= previousState then
+	if forestZone.State ~= previousState or profile.ForestZoneState ~= previousForestZoneState then
 		PlayerDataService.MarkDirty(player)
 	end
 
 	print(string.format("[ResourceService] ForestArea_01 state after update: %s", forestZone.State))
+
+	if profile.ForestZoneState == "Empty" and previousForestZoneState ~= "Empty" then
+		print(string.format("[WorldService] ForestZone is now Empty for %s", player.Name))
+	end
+
 	return forestZone.State
 end
 
@@ -451,6 +475,7 @@ local function mineForestStone(player, stoneModel, prompt)
 	if stoneObject.RemainingActions <= 0 then
 		stoneObject.RemainingActions = 0
 		stoneObject.State = "Empty"
+		syncForestZoneClearedObject(profile, objectId, stoneObject)
 		setForestResourceAvailable(stoneModel, prompt, false)
 		print(string.format("[ResourceService] %s is now Empty", objectId))
 	else
@@ -774,6 +799,7 @@ function ResourceService.HarvestForestArea(player)
 		treeCluster.RemainingActions = 0
 		treeCluster.State = "Empty"
 		forestZone.RemainingActions = 0
+		syncForestZoneClearedObject(profile, FOREST_TREE_CLUSTER_ID, treeCluster)
 		print("[ResourceService] ForestTreeCluster is now Empty")
 	else
 		treeCluster.State = "Active"
@@ -815,6 +841,8 @@ function ResourceService.ResetResourceZoneForDebug(player, resourceZoneId)
 
 	profile.ResourceZones = profile.ResourceZones or {}
 	profile.ResourceZones[FOREST_AREA_ID] = createDefaultForestAreaZone()
+	profile.ForestZoneState = "Active"
+	profile.ForestZoneClearedObjects = {}
 	PlayerDataService.MarkDirty(player)
 	forestAreaHarvestCooldownsByUserId[player.UserId] = nil
 

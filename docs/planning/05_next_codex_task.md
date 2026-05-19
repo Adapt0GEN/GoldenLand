@@ -1,55 +1,63 @@
 # 05. Next Codex Task
 
-# MVP 0.2.5 — Архитектура ForestZone: состояния зоны и ресурсы внутри зоны
+# MVP 0.2.6 — Визуальное развитие ForestZone после очистки
 
 ## Контекст
 
 Продолжаем Roblox/Rojo проект GoldenLand / «Златоземье: Своя Земля».
 
-В проекте уже есть или находится в тестировании:
+Предыдущая задача `MVP 0.2.5 — Архитектура ForestZone: состояния зоны и ресурсы внутри зоны` успешно протестирована.
+
+Сейчас уже работает:
 
 ```text
-базовые ресурсы
-металл
-Набор инструментов I
-ToolKitLevel
-BlockedPathToForest
 ForestUnlocked
-ForestZone
+ForestZoneState
+ForestZoneClearedObjects
+ZoneClearObject
+сохранение очищенных объектов
+отсутствие респавна очищенных объектов
+Empty-состояние
+обычные стартовые ресурсы не сломаны
 ```
 
-Игрок может открыть лесную зону через Набор инструментов I.
+Теперь нужно улучшить визуальную обратную связь.
 
 ---
 
 ## Проблема
 
-По итогам тестирования ForestZone работает не так, как нужно для долгосрочной механики освоения острова.
+Технически зона очищается, но игрок должен лучше видеть результат в мире.
 
-Сейчас наблюдается:
+Если ForestZone перешла в Empty, она не должна выглядеть как обычный густой лес или как случайно удалённые объекты.
 
-```text
-1. С зоной есть взаимодействие.
-2. Есть добыча материалов.
-3. Объекты исчезают за одно действие.
-4. Некоторые объекты появляются снова спустя несколько секунд.
-5. После состояния Empty остаются декоративные деревья, с которыми нельзя взаимодействовать.
-6. Камни на территории респавнятся по cooldown.
-```
-
-Главная проблема:
+Игроку нужно визуально показать:
 
 ```text
-ForestZone смешивает обычные ресурсные точки, декор и объекты освоения зоны.
+раньше здесь была дикая/заросшая зона
+теперь зона расчищена
+действия игрока изменили мир
+зона готова для будущего развития
 ```
 
 ---
 
 ## Цель задачи
 
-Сделать MVP-архитектуру ForestZone как зоны с состоянием.
+Сделать визуальное развитие ForestZone для состояний:
 
-ForestZone должна стать первой зоной-шаблоном для будущих зон.
+```text
+Active
+Empty
+```
+
+И подготовить базу под будущее состояние:
+
+```text
+Cleared
+```
+
+Важно: это визуальная и структурная задача, не новая большая механика.
 
 ---
 
@@ -57,76 +65,38 @@ ForestZone должна стать первой зоной-шаблоном дл
 
 ### Правило 1
 
-Обычные ресурсы и объекты освоения зоны — разные сущности.
+Не ломать уже работающую логику `MVP 0.2.5`.
 
 ```text
-Обычный ресурс:
-добывается → временно исчезает → респавнится
-
-Объект освоения зоны:
-очищается → сохраняется как очищенный → не респавнится
+ForestZoneState должен сохраняться.
+ForestZoneClearedObjects должны сохраняться.
+Очищенные ZoneClearObject не должны респавниться.
 ```
 
 ### Правило 2
 
-Если объект влияет на состояние зоны, он не должен респавниться как обычный ресурс.
+Не добавлять новые крупные системы.
+
+Не нужно делать:
+
+```text
+NPC
+врагов
+новые биомы
+новую экономику
+атаки на лагерь
+новую боёвку
+```
 
 ### Правило 3
 
-Если зона стала Empty, она не должна выглядеть как нетронутая густая зона.
+Визуал должен создаваться сервером в рамках текущей архитектуры.
 
----
-
-## Минимальная модель состояний
+Не создавать:
 
 ```text
-Locked — зона закрыта, ForestUnlocked = false
-Overgrown — зона открыта, но заросшая
-Active — зона содержит интерактивные объекты освоения
-Empty — интерактивные объекты зоны очищены
-Cleared — зона визуально освоена / преобразована
-```
-
-Для MVP можно использовать:
-
-```text
-Locked
-Active
-Empty
-```
-
----
-
-## Типы объектов зоны
-
-Ввести хотя бы на уровне кода/таблиц следующие типы:
-
-```text
-DecorOnly
-ZoneClearObject
-ZoneResourceNode
-ZoneOneTimeReward
-```
-
-Пример:
-
-```lua
-local FOREST_ZONE_OBJECTS = {
-    {
-        id = "ForestBlockage_1",
-        type = "ZoneClearObject",
-        reward = { Wood = 2 },
-    },
-    {
-        id = "ForestStonePile_1",
-        type = "ZoneClearObject",
-        reward = { Stone = 2 },
-    },
-    {
-        id = "ForestDecorTree_1",
-        type = "DecorOnly",
-    },
-}
+src/Workspace
+новый Rojo mapping
 ```
 
 ---
@@ -136,175 +106,132 @@ local FOREST_ZONE_OBJECTS = {
 Перед изменениями изучи:
 
 ```text
-docs/05_current_state.md
-docs/06_development_rules.md
 docs/planning/00_current_state.md
 docs/planning/01_roadmap.md
-docs/planning/02_idea_backlog.md
 docs/planning/03_decisions_log.md
 docs/planning/07_zone_architecture.md
 docs/planning/08_resource_rules.md
+docs/planning/09_visual_progression_rules.md
+
 src/ServerScriptService/Services/PlayerDataService.lua
 src/ServerScriptService/Services/WorldService.lua
-src/ServerScriptService/Services/ResourceService.lua
-src/ServerScriptService/Services/CurrencyService.lua
 src/ServerScriptService/ServerMain.server.lua
 ```
+
+ResourceService изучать только если WorldService сейчас зависит от его логики.
 
 ---
 
 ## Что сделать
 
-### 1. PlayerDataService.lua
+### 1. WorldService.lua — улучшить визуал Active-состояния
 
-Добавить или проверить поля профиля:
+Когда ForestZoneState == "Active", зона должна выглядеть заросшей, но понятной для взаимодействия.
 
-```lua
-ForestUnlocked = false
-ForestZoneState = "Locked"
-ForestZoneClearedObjects = {}
-```
-
-Требования:
+Добавить или улучшить:
 
 ```text
-старые сохранения должны нормально нормализоваться
-если ForestUnlocked == false, ForestZoneState должен быть "Locked"
-если ForestUnlocked == true, но ForestZoneState отсутствует, поставить "Active"
-ForestZoneClearedObjects должен быть таблицей
-```
-
-Добавить эти поля в:
-
-```text
-default profile
-normalizeLoadedProfile
-createSaveData
-GetPublicProfile, если полезно для диагностики
-```
-
----
-
-### 2. WorldService.lua
-
-Сделать ForestZone управляемой зоной.
-
-Нужно:
-
-```text
-не создавать дубли ForestZone
-создавать зону в зависимости от ForestZoneState
-создавать декоративные объекты отдельно
-создавать интерактивные объекты отдельно
-создавать ресурсные/наградные объекты отдельно, если они нужны
-уметь обновить визуальное состояние зоны
-```
-
-Желательная структура имён:
-
-```text
-ForestZone
-ForestZoneDecor
-ForestZoneInteractives
-ForestZoneResources
-ForestZoneSigns
-```
-
----
-
-### 3. Конфигурация объектов ForestZone
-
-Создать в WorldService локальную конфигурацию объектов ForestZone.
-
-Минимальный набор:
-
-```text
-ForestBlockage_1 — ZoneClearObject, награда Wood
-ForestBlockage_2 — ZoneClearObject, награда Wood
-ForestOldTree_1 — ZoneClearObject, награда Wood
-ForestStonePile_1 — ZoneClearObject, награда Stone
-ForestStonePile_2 — ZoneClearObject, награда Stone
-несколько DecorOnly деревьев/кустов
-```
-
-Каждый интерактивный объект должен иметь стабильный ID.
-
----
-
-### 4. Логика очистки объекта зоны
-
-При взаимодействии с ZoneClearObject:
-
-```text
-проверить профиль
-проверить ForestUnlocked
-проверить, не очищен ли objectId
-выдать reward через CurrencyService
-добавить objectId в ForestZoneClearedObjects
-скрыть/удалить объект
-проверить, остались ли интерактивные объекты
-если все очищены, поставить ForestZoneState = "Empty"
-отправить PlayerDataService.SendProfileUpdate(player)
-сохранить профиль, если есть безопасный метод SaveProfile
+группу ForestZoneDecor
+группу ForestZoneInteractives
+группу ForestZoneVisualState
+заросли / деревья / кусты
+понятные препятствия ZoneClearObject
+табличку "Лесная зона"
 ```
 
 Важно:
 
 ```text
-не менять ресурсы напрямую через profile.Wood/profile.Stone
-использовать CurrencyService
+DecorOnly не должен иметь prompt.
+ZoneClearObject должен иметь prompt.
 ```
 
 ---
 
-### 5. Поведение Empty
+### 2. WorldService.lua — улучшить визуал Empty-состояния
 
-Если ForestZoneState == "Empty":
+Когда ForestZoneState == "Empty":
 
 ```text
 не создавать очищенные ZoneClearObject
-не запускать для них cooldown
-не создавать густой декор в прежнем виде
+не создавать густой декор как в Active
 создать визуал очищенной зоны
 ```
 
-Для MVP достаточно:
+Минимальный Empty-визуал:
 
 ```text
+очищенная площадка
+простая тропинка
 меньше деревьев
+несколько пней
 табличка "Лесная зона очищена"
-простая тропинка или площадка
+можно добавить светлый участок земли или дорожку
+```
+
+Важно:
+
+```text
+Empty должен визуально отличаться от Active.
 ```
 
 ---
 
-### 6. ResourceService.lua
+### 3. Подготовить функцию для визуального состояния
 
-Проверить, не создаёт ли ResourceService обычные респавнящиеся камни/деревья внутри ForestZone.
+Если её ещё нет, добавить аккуратную функцию внутри WorldService, например:
 
-Если создаёт — исправить.
+```lua
+createForestZoneVisualForState(state)
+```
 
-Правило:
+или:
+
+```lua
+WorldService.UpdateForestZoneVisual(player)
+```
+
+Функция должна:
 
 ```text
-ResourceService может создавать обычные стартовые ресурсы.
-WorldService управляет объектами освоения ForestZone.
+очищать старые визуальные элементы состояния
+создавать визуал под текущее состояние
+не дублировать объекты при повторном вызове
 ```
 
 ---
 
-### 7. Логи
+### 4. Подготовить Cleared-состояние без полной реализации
 
-Добавить диагностические логи:
+Добавить заготовку визуала для `Cleared`, но не переводить в него автоматически, если это не предусмотрено текущей логикой.
+
+Для Cleared можно сделать минимальный placeholder:
 
 ```text
-[WorldService] ForestZone state for PlayerName: <state>
-[WorldService] Created ForestZone with state <state>
-[WorldService] Created ForestZone object <objectId> type <type>
-[WorldService] PlayerName cleared forest object <objectId>
-[WorldService] ForestZone object already cleared: <objectId>
-[WorldService] ForestZone is now Empty for PlayerName
-[WorldService] Skipped cleared forest object <objectId>
+ещё более чистая площадка
+табличка "Лесная зона освоена"
+место под будущий объект / NPC / проход
+```
+
+Важно:
+
+```text
+не добавлять NPC
+не добавлять новый проход
+не добавлять новую механику
+```
+
+---
+
+### 5. Логи
+
+Добавить или сохранить понятные логи:
+
+```text
+[WorldService] Rendering ForestZone visual state: Active
+[WorldService] Rendering ForestZone visual state: Empty
+[WorldService] Rendering ForestZone visual state: Cleared
+[WorldService] Cleared old ForestZone visual state objects
 [WorldService] Created Empty ForestZone visual
 ```
 
@@ -321,8 +248,10 @@ Rojo mapping
 склад
 мастерскую
 ToolKitLevel без необходимости
-квест first_steps без необходимости
-NPCService без необходимости
+квест first_steps
+NPCService
+боёвку
+новые зоны
 ```
 
 ---
@@ -345,8 +274,8 @@ NPCService без необходимости
 
 ```text
 1. Список изменённых файлов.
-2. Краткое объяснение архитектуры ForestZoneState.
-3. Как разделены обычные ресурсы и объекты освоения зоны.
+2. Краткое объяснение, как теперь визуально отличаются Active и Empty.
+3. Что подготовлено для Cleared.
 4. Diff или полный код изменённых файлов.
 5. Инструкцию тестирования в Roblox Studio.
 6. Какие строки должны быть в Output.
@@ -357,20 +286,38 @@ NPCService без необходимости
 ## Тест в Roblox Studio
 
 1. Запустить Play.
-2. Убедиться, что ForestUnlocked уже true или открыть лес через проход.
-3. Войти в ForestZone.
-4. Найти интерактивные объекты зоны.
-5. Взаимодействовать с одним объектом.
-6. Проверить, что ресурс начислен через UI.
-7. Проверить, что объект исчез.
-8. Подождать 10–20 секунд.
-9. Проверить, что очищенный объект не появился снова.
-10. Очистить все интерактивные объекты зоны.
-11. Проверить, что ForestZoneState стал `Empty`.
-12. Проверить, что густой декор не остался в старом виде.
-13. Перезапустить Play.
-14. Проверить, что очищенные объекты не появились снова.
-15. Проверить, что Empty-визуал восстановился.
-16. Проверить, что стартовые дерево/камень/металл/золото продолжают работать.
-17. Проверить, что дом, склад, мастерская и ToolKitLevel не сломались.
-18. Проверить Output на ошибки.
+2. Убедиться, что ForestZone открыта.
+3. Если ForestZoneState == Active, проверить внешний вид:
+   - зона выглядит заросшей;
+   - интерактивные объекты видны;
+   - декор не имеет prompt;
+   - ZoneClearObject имеют prompt.
+4. Очистить все интерактивные объекты.
+5. Проверить, что ForestZoneState стал Empty.
+6. Проверить, что визуал зоны изменился:
+   - меньше зарослей;
+   - появилась очищенная площадка или тропинка;
+   - нет старых интерактивных объектов;
+   - есть понятный знак, что зона очищена.
+7. Подождать 10–20 секунд.
+8. Проверить, что очищенные объекты не появились снова.
+9. Перезапустить Play.
+10. Проверить, что Empty-визуал восстановился.
+11. Проверить, что стартовые дерево/камень/металл/золото продолжают работать.
+12. Проверить, что дом, склад, мастерская и ToolKitLevel не сломались.
+13. Проверить Output на ошибки.
+
+---
+
+## Критерий готовности
+
+Задача считается выполненной, если:
+
+```text
+Active и Empty визуально отличаются
+Empty не выглядит как густой нетронутый лес
+очищенные объекты не респавнятся
+визуал не дублируется при повторных вызовах
+перезапуск сохраняет правильный визуал
+логика MVP 0.2.5 не сломана
+```

@@ -299,6 +299,18 @@ local function ensureForestZoneResourcesFolder(forestZone)
 	return forestResources
 end
 
+local function getForestZoneState(profile)
+	if profile.ForestUnlocked ~= true then
+		return "Locked"
+	end
+
+	if profile.ForestZoneState == "Empty" then
+		return "Empty"
+	end
+
+	return "Active"
+end
+
 local function createForestAreaStage(parent, stageName, treeCount)
 	local stage = Instance.new("Model")
 	stage.Name = string.format("%s_%s", FOREST_AREA_ID, stageName)
@@ -471,13 +483,14 @@ local function createForestAreaVisual(forestResources, visualStage, treeCount)
 	return forestArea
 end
 
-local function createForestZone()
+local function createForestZone(state)
 	local worldRoot = getWorldRoot()
 	local existingForestZone = worldRoot:FindFirstChild(FOREST_ZONE_NAME)
 
 	if existingForestZone then
 		removeLegacyForestZoneTrees(existingForestZone)
 		createForestAreaVisual(ensureForestZoneResourcesFolder(existingForestZone))
+		print(string.format("[WorldService] Created ForestZone with state %s", state or "Active"))
 		return existingForestZone
 	end
 
@@ -499,7 +512,7 @@ local function createForestZone()
 	createTextSign("ForestZoneSign", "Лесная зона", FOREST_ZONE_POSITION + Vector3.new(0, 2.5, -13), forestZone)
 	createForestAreaVisual(ensureForestZoneResourcesFolder(forestZone))
 
-	print("[WorldService] Created forest zone.")
+	print(string.format("[WorldService] Created ForestZone with state %s", state or "Active"))
 	return forestZone
 end
 
@@ -581,8 +594,10 @@ function WorldService.TryClearForestPath(player)
 	end
 
 	if profile.ForestUnlocked == true then
+		profile.ForestZoneState = getForestZoneState(profile)
+		print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, profile.ForestZoneState))
 		removeBlockedPath()
-		ResourceService.CreateForestZoneResources(createForestZone(), true)
+		ResourceService.CreateForestZoneResources(createForestZone(profile.ForestZoneState), true)
 		WorldService.UpdateForestAreaVisual(player)
 		return true
 	end
@@ -594,9 +609,12 @@ function WorldService.TryClearForestPath(player)
 	end
 
 	profile.ForestUnlocked = true
+	profile.ForestZoneState = "Active"
+	profile.ForestZoneClearedObjects = profile.ForestZoneClearedObjects or {}
 	PlayerDataService.MarkDirty(player)
 	removeBlockedPath()
-	ResourceService.CreateForestZoneResources(createForestZone(), true)
+	print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, profile.ForestZoneState))
+	ResourceService.CreateForestZoneResources(createForestZone(profile.ForestZoneState), true)
 	WorldService.UpdateForestAreaVisual(player)
 
 	if PlayerDataService.SendProfileUpdate then
@@ -622,10 +640,14 @@ function WorldService.UpdateForestAccessForPlayer(player)
 	end
 
 	if profile.ForestUnlocked == true then
+		profile.ForestZoneState = getForestZoneState(profile)
+		print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, profile.ForestZoneState))
 		removeBlockedPath()
-		ResourceService.CreateForestZoneResources(createForestZone(), true)
+		ResourceService.CreateForestZoneResources(createForestZone(profile.ForestZoneState), true)
 		WorldService.UpdateForestAreaVisual(player)
 	else
+		profile.ForestZoneState = "Locked"
+		print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, profile.ForestZoneState))
 		createBlockedPathToForest()
 	end
 
@@ -684,6 +706,9 @@ function WorldService.UpdateForestAreaVisual(player)
 	end
 
 	local forestResources = ensureForestZoneResourcesFolder(forestZone)
+	profile.ForestZoneState = getForestZoneState(profile)
+	print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, profile.ForestZoneState))
+
 	local resourceZones = profile.ResourceZones or {}
 	local forestAreaData = resourceZones[FOREST_AREA_ID] or {}
 	local visualStage, treeCount = getForestAreaVisualStage(forestAreaData)
@@ -701,6 +726,10 @@ function WorldService.UpdateForestAreaVisual(player)
 
 	updateForestStoneVisuals(forestResources, forestAreaData)
 	print(string.format("[WorldService] ForestArea_01 visual stage: %s, trees=%d", visualStage, treeCount))
+
+	if profile.ForestZoneState == "Empty" then
+		print("[WorldService] Created Empty ForestZone visual")
+	end
 
 	return true
 end

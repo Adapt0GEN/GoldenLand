@@ -109,6 +109,8 @@ local function createDefaultProfile(player)
 		WorkshopBuilt = false,
 		ToolKitLevel = 0,
 		ForestUnlocked = false,
+		ForestZoneState = "Locked",
+		ForestZoneClearedObjects = {},
 		CurrentQuestId = nil,
 		CompletedQuests = {},
 		QuestProgress = {},
@@ -148,7 +150,7 @@ local function logProfileValues(prefix, profile)
 	local forestState, forestTreeRemainingActions, forestStone01State, forestStone02State = getForestAreaLogValues(profile)
 
 	print(string.format(
-		"[PlayerDataService] %s: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d ToolKitLevel=%d ForestUnlocked=%s ForestArea_01.State=%s ForestTreeCluster.RemainingActions=%d ForestStone_01.State=%s ForestStone_02.State=%s",
+		"[PlayerDataService] %s: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d ToolKitLevel=%d ForestUnlocked=%s ForestZoneState=%s ForestArea_01.State=%s ForestTreeCluster.RemainingActions=%d ForestStone_01.State=%s ForestStone_02.State=%s",
 		prefix,
 		profile.Gold or 0,
 		profile.Wood or 0,
@@ -157,6 +159,7 @@ local function logProfileValues(prefix, profile)
 		profile.HouseLevel or 1,
 		profile.ToolKitLevel or 0,
 		tostring(profile.ForestUnlocked == true),
+		profile.ForestZoneState or "nil",
 		forestState,
 		forestTreeRemainingActions,
 		forestStone01State,
@@ -299,6 +302,53 @@ local function normalizeResourceZones(savedResourceZones, savedResourceAreas)
 	return resourceZones
 end
 
+local function normalizeForestZoneState(savedProfile, profile)
+	if profile.ForestUnlocked ~= true then
+		return "Locked"
+	end
+
+	if savedProfile.ForestZoneState == "Empty" then
+		return "Empty"
+	elseif savedProfile.ForestZoneState == "Active" then
+		return "Active"
+	end
+
+	local forestArea = profile.ResourceZones and profile.ResourceZones.ForestArea_01
+
+	if type(forestArea) == "table" and forestArea.State == "Empty" then
+		return "Empty"
+	end
+
+	return "Active"
+end
+
+local function normalizeForestZoneClearedObjects(savedProfile, profile)
+	local clearedObjects = {}
+
+	if type(savedProfile.ForestZoneClearedObjects) == "table" then
+		for objectId, isCleared in pairs(savedProfile.ForestZoneClearedObjects) do
+			if isCleared == true then
+				clearedObjects[objectId] = true
+			end
+		end
+	end
+
+	local forestArea = profile.ResourceZones and profile.ResourceZones.ForestArea_01
+	local objects = if type(forestArea) == "table" then forestArea.Objects else nil
+
+	if type(objects) == "table" then
+		for objectId, resourceObject in pairs(objects) do
+			if type(resourceObject) == "table"
+				and (resourceObject.State == "Empty" or (resourceObject.RemainingActions or 0) <= 0)
+			then
+				clearedObjects[objectId] = true
+			end
+		end
+	end
+
+	return clearedObjects
+end
+
 local function normalizeLoadedProfile(player, savedProfile)
 	local profile = createDefaultProfile(player)
 
@@ -343,6 +393,8 @@ local function normalizeLoadedProfile(player, savedProfile)
 	end
 
 	profile.ResourceZones = normalizeResourceZones(savedProfile.ResourceZones, savedProfile.ResourceAreas)
+	profile.ForestZoneState = normalizeForestZoneState(savedProfile, profile)
+	profile.ForestZoneClearedObjects = normalizeForestZoneClearedObjects(savedProfile, profile)
 
 	return profile
 end
@@ -360,6 +412,8 @@ local function createSaveData(profile)
 		WorkshopBuilt = profile.WorkshopBuilt,
 		ToolKitLevel = profile.ToolKitLevel,
 		ForestUnlocked = profile.ForestUnlocked,
+		ForestZoneState = profile.ForestZoneState,
+		ForestZoneClearedObjects = copyTable(profile.ForestZoneClearedObjects),
 		CurrentQuestId = profile.CurrentQuestId,
 		CompletedQuests = copyTable(profile.CompletedQuests),
 		QuestProgress = copyTable(profile.QuestProgress),
@@ -462,6 +516,8 @@ function PlayerDataService.GetPublicProfile(player)
 		WorkshopBuilt = profile.WorkshopBuilt,
 		ToolKitLevel = profile.ToolKitLevel,
 		ForestUnlocked = profile.ForestUnlocked,
+		ForestZoneState = profile.ForestZoneState,
+		ForestZoneClearedObjects = copyTable(profile.ForestZoneClearedObjects),
 		ResourceZones = copyTable(profile.ResourceZones),
 	}
 end
