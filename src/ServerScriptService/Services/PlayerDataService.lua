@@ -104,6 +104,7 @@ local function createDefaultProfile(player)
 		Stone = 0,
 		Metal = 0,
 		MetalIngot = 0,
+		MetalParts = 0,
 		HouseLevel = 1,
 		PlotUnlocked = false,
 		StorageBuilt = false,
@@ -153,13 +154,14 @@ local function logProfileValues(prefix, profile)
 	local forestState, forestTreeRemainingActions, forestStone01State, forestStone02State = getForestAreaLogValues(profile)
 
 	print(string.format(
-		"[PlayerDataService] %s: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d HouseLevel=%d ToolKitLevel=%d ForgeLevel=%d ForestUnlocked=%s ForestZoneState=%s ForestArea_01.State=%s ForestTreeCluster.RemainingActions=%d ForestStone_01.State=%s ForestStone_02.State=%s",
+		"[PlayerDataService] %s: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d HouseLevel=%d ToolKitLevel=%d ForgeLevel=%d ForestUnlocked=%s ForestZoneState=%s ForestArea_01.State=%s ForestTreeCluster.RemainingActions=%d ForestStone_01.State=%s ForestStone_02.State=%s",
 		prefix,
 		profile.Gold or 0,
 		profile.Wood or 0,
 		profile.Stone or 0,
 		profile.Metal or 0,
 		profile.MetalIngot or 0,
+		profile.MetalParts or 0,
 		profile.HouseLevel or 1,
 		profile.ToolKitLevel or 0,
 		profile.ForgeLevel or 0,
@@ -367,6 +369,7 @@ local function normalizeLoadedProfile(player, savedProfile)
 	applyNumber(profile, savedProfile, "Stone")
 	applyNumber(profile, savedProfile, "Metal")
 	applyNumber(profile, savedProfile, "MetalIngot")
+	applyNumber(profile, savedProfile, "MetalParts")
 	applyNumber(profile, savedProfile, "HouseLevel")
 	applyNumber(profile, savedProfile, "ToolKitLevel")
 	applyNumber(profile, savedProfile, "ForgeLevel")
@@ -418,6 +421,7 @@ local function createSaveData(profile)
 		Stone = profile.Stone,
 		Metal = profile.Metal,
 		MetalIngot = profile.MetalIngot,
+		MetalParts = profile.MetalParts,
 		HouseLevel = profile.HouseLevel,
 		PlotUnlocked = profile.PlotUnlocked,
 		StorageBuilt = profile.StorageBuilt,
@@ -525,6 +529,7 @@ function PlayerDataService.GetPublicProfile(player)
 		Stone = profile.Stone,
 		Metal = profile.Metal,
 		MetalIngot = profile.MetalIngot,
+		MetalParts = profile.MetalParts,
 		HouseLevel = profile.HouseLevel,
 		PlotUnlocked = profile.PlotUnlocked,
 		StorageBuilt = profile.StorageBuilt,
@@ -548,12 +553,13 @@ function PlayerDataService.SendProfileUpdate(player)
 
 	getRemoteEvent("PlayerStatsUpdateEvent"):FireClient(player, publicProfile)
 	print(string.format(
-		"[PlayerDataService] Sent stats update: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d HouseLevel=%d ToolKitLevel=%d ForgeLevel=%d",
+		"[PlayerDataService] Sent stats update: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d HouseLevel=%d ToolKitLevel=%d ForgeLevel=%d",
 		publicProfile.Gold,
 		publicProfile.Wood,
 		publicProfile.Stone,
 		publicProfile.Metal,
 		publicProfile.MetalIngot,
+		publicProfile.MetalParts,
 		publicProfile.HouseLevel,
 		publicProfile.ToolKitLevel,
 		publicProfile.ForgeLevel

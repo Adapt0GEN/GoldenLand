@@ -10,10 +10,12 @@ local RESOURCE_ORDER = {
 	"Stone",
 	"Metal",
 	"MetalIngot",
+	"MetalParts",
 	"Gold",
 }
 
 local RESOURCE_LABELS = {
+	MetalParts = "детали",
 	MetalIngot = "слитки",
 	Gold = "золото",
 	Wood = "дерево",
@@ -23,14 +25,15 @@ local RESOURCE_LABELS = {
 
 local function printResourceState(player, profile, action)
 	print(string.format(
-		"[CurrencyService] %s for %s. Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d.",
+		"[CurrencyService] %s for %s. Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d.",
 		action,
 		player.Name,
 		profile.Gold,
 		profile.Wood,
 		profile.Stone,
 		profile.Metal,
-		profile.MetalIngot or 0
+		profile.MetalIngot or 0,
+		profile.MetalParts or 0
 	))
 end
 
@@ -89,6 +92,10 @@ end
 
 function CurrencyService.AddMetalIngot(player, amount)
 	return addResource(player, "MetalIngot", amount)
+end
+
+function CurrencyService.AddMetalParts(player, amount)
+	return addResource(player, "MetalParts", amount)
 end
 
 function CurrencyService.FormatCost(cost)
@@ -177,12 +184,14 @@ function CurrencyService.SpendResources(player, cost)
 	local stoneCost = cost.Stone or 0
 	local metalCost = cost.Metal or 0
 	local metalIngotCost = cost.MetalIngot or 0
+	local metalPartsCost = cost.MetalParts or 0
 
 	profile.Gold -= goldCost
 	profile.Wood -= woodCost
 	profile.Stone -= stoneCost
 	profile.Metal -= metalCost
 	profile.MetalIngot -= metalIngotCost
+	profile.MetalParts -= metalPartsCost
 	PlayerDataService.MarkDirty(player)
 
 	printResourceState(player, profile, "Resource totals after spend")

@@ -38,6 +38,10 @@ local FORGE_SMELT_COST = {
 	Metal = 5,
 }
 
+local FORGE_PARTS_COST = {
+	MetalIngot = 2,
+}
+
 local TOOL_KIT_I_COST = {
 	Gold = 3,
 	Wood = 10,
@@ -130,6 +134,7 @@ local function buildResourceSnapshot(profile)
 		Stone = profile.Stone or 0,
 		Metal = profile.Metal or 0,
 		MetalIngot = profile.MetalIngot or 0,
+		MetalParts = profile.MetalParts or 0,
 	}
 end
 
@@ -140,6 +145,7 @@ local function buildMissingResourceSnapshot(player, cost)
 		Stone = 0,
 		Metal = 0,
 		MetalIngot = 0,
+		MetalParts = 0,
 	}
 
 	for _, missingResource in ipairs(CurrencyService.GetMissingResources(player, cost)) do
@@ -244,6 +250,21 @@ local function buildForgeSmeltPreview(player)
 		"Плавка в кузнице",
 		"Металл 5 -> слиток 1",
 		FORGE_SMELT_COST
+	)
+end
+
+local function buildForgePartsPreview(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile or (profile.ForgeLevel or 0) < 1 then
+		return nil
+	end
+
+	return buildActionPreview(
+		player,
+		"Производство деталей",
+		"Слитки 2 -> детали 1",
+		FORGE_PARTS_COST
 	)
 end
 
@@ -367,6 +388,37 @@ local function addForgeSmeltPrompt(forge)
 
 	prompt.Triggered:Connect(function(player)
 		PlotService.TrySmeltMetalIngot(player)
+	end)
+
+	return prompt
+end
+
+local function addForgePartsPrompt(forge)
+	local promptPart = forge:FindFirstChild("ForgeAnvil")
+
+	if not promptPart then
+		warn("[Forge] ForgeAnvil was not found. Metal parts prompt was not created.")
+		return nil
+	end
+
+	local existingPrompt = promptPart:FindFirstChild("MakeMetalPartsPrompt")
+
+	if existingPrompt then
+		return existingPrompt
+	end
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "MakeMetalPartsPrompt"
+	prompt.ObjectText = "Кузница"
+	prompt.ActionText = "Сделать детали"
+	prompt.HoldDuration = 0.7
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt.Enabled = true
+	prompt.Parent = promptPart
+
+	prompt.Triggered:Connect(function(player)
+		PlotService.TryMakeMetalParts(player)
 	end)
 
 	return prompt
@@ -1060,6 +1112,7 @@ local function createForge(player, plotModel)
 
 	if existingForge then
 		addForgeSmeltPrompt(existingForge)
+		addForgePartsPrompt(existingForge)
 		return existingForge
 	end
 
@@ -1137,6 +1190,7 @@ local function createForge(player, plotModel)
 	label.Parent = surfaceGui
 
 	addForgeSmeltPrompt(forge)
+	addForgePartsPrompt(forge)
 	print(string.format("[Forge] Restored forge for %s", player.Name))
 	return forge
 end
@@ -1536,6 +1590,71 @@ function PlotService.TrySmeltMetalIngot(player)
 	return true
 end
 
+function PlotService.CanMakeMetalParts(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return false, "profile not found"
+	end
+
+	if (profile.ForgeLevel or 0) < 1 then
+		return false, "forge not built"
+	end
+
+	if not CurrencyService.CanAfford(player, FORGE_PARTS_COST) then
+		return false, "not enough resources", FORGE_PARTS_COST, CurrencyService.FormatMissingResources(player, FORGE_PARTS_COST)
+	end
+
+	return true, "can make parts", FORGE_PARTS_COST
+end
+
+function PlotService.TryMakeMetalParts(player)
+	print(string.format("[Forge] %s tried to make MetalParts", player.Name))
+
+	local canMake, reason, cost, missingResourcesMessage = PlotService.CanMakeMetalParts(player)
+
+	if not canMake then
+		if reason == "forge not built" then
+			warn(string.format("[Forge] %s cannot make MetalParts: forge is not built", player.Name))
+			sendPlayerMessage(player, "Кузница не построена")
+		elseif reason == "not enough resources" then
+			warn(string.format("[Forge] %s cannot make MetalParts: not enough resources", player.Name))
+			sendPlayerMessage(player, string.format(
+				"Недостаточно ресурсов для деталей. %s. %s",
+				formatCost(cost),
+				missingResourcesMessage or CurrencyService.FormatMissingResources(player, cost)
+			))
+		else
+			warn(string.format("[Forge] %s cannot make MetalParts: %s", player.Name, reason))
+			sendPlayerMessage(player, "Детали нельзя сделать")
+		end
+
+		return false
+	end
+
+	local resourcesSpent, spendMissingResourcesMessage = CurrencyService.SpendResources(player, cost)
+
+	if not resourcesSpent then
+		sendPlayerMessage(player, string.format(
+			"Недостаточно ресурсов для деталей. %s",
+			spendMissingResourcesMessage or CurrencyService.FormatMissingResources(player, cost)
+		))
+		return false
+	end
+
+	CurrencyService.AddMetalParts(player, 1)
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player)
+	end
+
+	sendPlayerMessage(player, "Детали сделаны")
+	hideActionPreview(player)
+	print(string.format("[Forge] %s made MetalParts", player.Name))
+
+	return true
+end
+
 function PlotService.CanBuildWorkshop(player)
 	local profile = PlayerDataService.GetProfile(player)
 
@@ -1867,6 +1986,8 @@ local function handleActionPreviewRequest(player, request)
 		previewData = buildForgePreview(player)
 	elseif request.promptName == "SmeltMetalIngotPrompt" then
 		previewData = buildForgeSmeltPreview(player)
+	elseif request.promptName == "MakeMetalPartsPrompt" then
+		previewData = buildForgePartsPreview(player)
 	else
 		return
 	end
