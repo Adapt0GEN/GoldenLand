@@ -241,8 +241,8 @@ local function buildForgeSmeltPreview(player)
 
 	return buildActionPreview(
 		player,
-		"Forge smelting",
-		"Metal 5 -> MetalIngot 1",
+		"Плавка в кузнице",
+		"Металл 5 -> слиток 1",
 		FORGE_SMELT_COST
 	)
 end
@@ -357,8 +357,8 @@ local function addForgeSmeltPrompt(forge)
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "SmeltMetalIngotPrompt"
-	prompt.ObjectText = "Forge"
-	prompt.ActionText = "Smelt MetalIngot"
+	prompt.ObjectText = "Кузница"
+	prompt.ActionText = "Выплавить слиток"
 	prompt.HoldDuration = 0.7
 	prompt.MaxActivationDistance = 12
 	prompt.RequiresLineOfSight = false
@@ -1497,17 +1497,17 @@ function PlotService.TrySmeltMetalIngot(player)
 	if not canSmelt then
 		if reason == "forge not built" then
 			warn(string.format("[Forge] %s cannot smelt MetalIngot: forge is not built", player.Name))
-			sendPlayerMessage(player, "Forge is not built")
+			sendPlayerMessage(player, "Кузница не построена")
 		elseif reason == "not enough resources" then
 			warn(string.format("[Forge] %s cannot smelt MetalIngot: not enough resources", player.Name))
 			sendPlayerMessage(player, string.format(
-				"Not enough resources for smelting. %s. %s",
+				"Недостаточно ресурсов для плавки. %s. %s",
 				formatCost(cost),
 				missingResourcesMessage or CurrencyService.FormatMissingResources(player, cost)
 			))
 		else
 			warn(string.format("[Forge] %s cannot smelt MetalIngot: %s", player.Name, reason))
-			sendPlayerMessage(player, "MetalIngot cannot be smelted")
+			sendPlayerMessage(player, "Слиток нельзя выплавить")
 		end
 
 		return false
@@ -1517,7 +1517,7 @@ function PlotService.TrySmeltMetalIngot(player)
 
 	if not resourcesSpent then
 		sendPlayerMessage(player, string.format(
-			"Not enough resources for smelting. %s",
+			"Недостаточно ресурсов для плавки. %s",
 			spendMissingResourcesMessage or CurrencyService.FormatMissingResources(player, cost)
 		))
 		return false
@@ -1529,7 +1529,7 @@ function PlotService.TrySmeltMetalIngot(player)
 		PlayerDataService.SaveProfile(player)
 	end
 
-	sendPlayerMessage(player, "MetalIngot smelted")
+	sendPlayerMessage(player, "Слиток выплавлен")
 	hideActionPreview(player)
 	print(string.format("[Forge] %s smelted MetalIngot", player.Name))
 

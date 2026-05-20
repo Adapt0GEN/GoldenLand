@@ -32,7 +32,7 @@ statsLabel.TextWrapped = true
 statsLabel.TextXAlignment = Enum.TextXAlignment.Left
 statsLabel.TextYAlignment = Enum.TextYAlignment.Center
 statsLabel.Text = "Золото: 0\nДерево: 0\nКамень: 0\nМеталл: 0\nДом: уровень 1\nИнструменты: нет\nКузница: уровень 0"
-statsLabel.Text = statsLabel.Text .. "\nMetalIngot: 0"
+statsLabel.Text = statsLabel.Text .. "\nСлитки: 0"
 statsLabel.Parent = screenGui
 
 local questLabel = Instance.new("TextLabel")
@@ -167,7 +167,7 @@ local function updateStatsUi(data)
 		toolKitText,
 		forgeLevel
 	)
-	statsLabel.Text = statsLabel.Text .. string.format("\nMetalIngot: %d", metalIngot)
+	statsLabel.Text = statsLabel.Text .. string.format("\nСлитки: %d", metalIngot)
 
 	if currentPreviewPromptName then
 		actionPreviewEvent:FireServer({
