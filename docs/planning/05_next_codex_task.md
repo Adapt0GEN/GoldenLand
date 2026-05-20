@@ -1,159 +1,68 @@
-# 05. Next Codex Task
+# MVP 0.4.0-step-2 — Forge smelting / Плавка металла
 
-# MVP 0.4.0-step-1 - Forge foundation / Кузница как здание
+## Goal
 
-## Контекст
+Add the first forge production action:
 
-MVP 0.3.4 завершен и протестирован. В проекте уже работают:
+Metal -> MetalIngot
 
-- базовые ресурсы `Gold`, `Wood`, `Stone`, `Metal`;
-- UI ресурсов;
-- сохранение профиля;
-- дом;
-- склад;
-- мастерская;
-- `ToolKitLevel`;
-- `Набор инструментов I`;
-- `Набор инструментов II`;
-- ForestZone через `ToolKitLevel >= 1`;
-- `ForestZoneState`: `Active` / `Medium` / `Low` / `Empty`;
-- сохранение `ForestArea_01` и `Empty`-состояния ForestZone;
-- RockZone через `ToolKitLevel >= 2`;
-- сохранение `RockZoneUnlocked`;
-- восстановление RockZone после перезапуска;
-- системные сообщения стоимости/нехватки ресурсов;
-- Action Preview UI для дома и мастерской;
-- dev/admin tool;
-- `RichStoneNode` в RockZone: богатый камень, `+4 Stone`;
-- `MetalVein` в RockZone: металлическая жила, `+3 Metal`.
+The player should be able to use the built forge to smelt raw Metal into MetalIngot. MetalIngot must be saved, restored, shown in UI, and updated through the server-side profile/resource flow.
 
-RockZone стала источником усиленной добычи камня и металла. Следующий маленький шаг - подготовить экономический переход к кузнице, но пока не добавлять переработку металла.
+## Current context
 
----
+Already implemented:
+- Gold, Wood, Stone, Metal;
+- UI resources;
+- profile saving/loading;
+- house;
+- storage;
+- workshop;
+- ToolKitLevel;
+- ForestZone;
+- RockZone;
+- RichStoneNode gives +4 Stone;
+- MetalVein gives +3 Metal;
+- Forge building foundation;
+- ForgeLevel = 1 after construction;
+- forge restores after restart.
 
-## Цель
+## Scope
 
-Добавить кузницу как новое здание лагеря, которое игрок может построить за ресурсы.
+Implement only:
+- MetalIngot as a new processed resource;
+- forge smelting action:
+  - cost: Metal = 5;
+  - result: MetalIngot +1;
+- UI display for MetalIngot;
+- saving/loading MetalIngot.
 
-На этом шаге кузница только:
+Do not implement:
+- MetalParts;
+- weapons;
+- armor;
+- house upgrades using ingots;
+- automation;
+- workers;
+- combat;
+- classes;
+- backpack;
+- food/fatigue.
 
-- строится;
-- сохраняется;
-- восстанавливается после перезапуска;
-- отображается в мире.
+## Files to inspect
 
-Переработку металла в слитки делать следующим отдельным шагом.
+- docs/00_codex_context.md
+- docs/05_current_state.md
+- docs/06_development_rules.md
+- src/ServerScriptService/Services/PlayerDataService.lua
+- src/ServerScriptService/Services/CurrencyService.lua
+- src/ServerScriptService/Services/PlotService.lua
+- src/StarterPlayer/StarterPlayerScripts/ClientMain.client.lua
 
----
+## Required changes
 
-## План задачи
+### 1. PlayerDataService.lua
 
-### 1. Профиль игрока
+Add new profile field:
 
-- Добавить `ForgeLevel = 0` в профиль.
-- Сохранять `ForgeLevel`.
-- Восстанавливать `ForgeLevel` после перезапуска.
-- Отправлять обновление профиля после строительства кузницы.
-
-### 2. Место строительства кузницы
-
-- Добавить место строительства кузницы на личном участке.
-- Добавить `ProximityPrompt` с действием:
-
-```text
-Построить кузницу
-```
-
-- Кузница должна быть частью лагеря рядом с домом, складом и мастерской.
-- Не мапить `Workspace` через Rojo и не создавать `src/Workspace`.
-
-### 3. Стоимость первой кузницы
-
-Первая кузница строится за:
-
-```text
-Wood = 20
-Stone = 30
-Metal = 15
-Gold = 10
-```
-
-### 4. Поведение строительства
-
-- Если ресурсов не хватает, показать системное сообщение с ценой и нехваткой.
-- Если ресурсов хватает, списать ресурсы через `CurrencyService.SpendResources`.
-- Установить `ForgeLevel = 1`.
-- Создать визуальную кузницу в мире.
-- Отправить обновление профиля.
-- Сохранить профиль.
-- После перезапуска восстановить кузницу, если `ForgeLevel >= 1`.
-
-### 5. Что пока не добавлять
-
-В этой задаче не добавлять:
-
-- рецепты слитков;
-- `MetalIngot`;
-- детали;
-- переработку металла;
-- очередь производства;
-- таймеры;
-- автоматизацию;
-- боевку;
-- классы;
-- рюкзак/инвентарь;
-- еду;
-- усталость.
-
----
-
-## Критические правила
-
-- Код править только в `src/`.
-- `Workspace` через Rojo не мапить.
-- `src/Workspace` не создавать.
-- `default.project.json` не трогать.
-- Настройки персонажа R15/R6 не трогать.
-- Не ломать дом, склад, мастерскую, `ToolKitLevel`, ForestZone, RockZone.
-- Не делать задачу больше, чем строительство кузницы.
-
----
-
-## Что проверить
-
-1. Запустить Play.
-2. Проверить, что у нового/сброшенного профиля `ForgeLevel = 0`.
-3. Найти место строительства кузницы на личном участке.
-4. Проверить `ProximityPrompt` с действием `Построить кузницу`.
-5. Попробовать построить кузницу без ресурсов.
-6. Убедиться, что показано системное сообщение с ценой и нехваткой.
-7. Выдать ресурсы через dev/admin tool или добыть их обычным путем.
-8. Построить кузницу.
-9. Убедиться, что ресурсы списались по цене:
-
-```text
-Wood = 20
-Stone = 30
-Metal = 15
-Gold = 10
-```
-
-10. Убедиться, что `ForgeLevel = 1`.
-11. Убедиться, что визуальная кузница появилась в мире.
-12. Перезапустить Play.
-13. Убедиться, что `ForgeLevel` восстановился и кузница снова отображается.
-14. Проверить, что дом, склад, мастерская, `ToolKitLevel`, ForestZone и RockZone не сломались.
-
----
-
-## Ожидаемый ответ Codex
-
-В конце показать:
-
-```text
-1. результат git status перед началом
-2. список измененных файлов
-3. краткое описание изменений
-4. diff
-5. команду для проверки: git diff
-```
+```lua
+MetalIngot = 0
