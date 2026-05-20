@@ -20,7 +20,7 @@ screenGui.Parent = playerGui
 
 local statsLabel = Instance.new("TextLabel")
 statsLabel.Name = "StatsLabel"
-statsLabel.Size = UDim2.fromOffset(280, 185)
+statsLabel.Size = UDim2.fromOffset(280, 205)
 statsLabel.Position = UDim2.fromOffset(20, 20)
 statsLabel.BackgroundColor3 = Color3.fromRGB(28, 34, 30)
 statsLabel.BackgroundTransparency = 0.12
@@ -32,12 +32,13 @@ statsLabel.TextWrapped = true
 statsLabel.TextXAlignment = Enum.TextXAlignment.Left
 statsLabel.TextYAlignment = Enum.TextYAlignment.Center
 statsLabel.Text = "Золото: 0\nДерево: 0\nКамень: 0\nМеталл: 0\nДом: уровень 1\nИнструменты: нет\nКузница: уровень 0"
+statsLabel.Text = statsLabel.Text .. "\nMetalIngot: 0"
 statsLabel.Parent = screenGui
 
 local questLabel = Instance.new("TextLabel")
 questLabel.Name = "QuestLabel"
 questLabel.Size = UDim2.fromOffset(320, 90)
-questLabel.Position = UDim2.fromOffset(20, 195)
+questLabel.Position = UDim2.fromOffset(20, 215)
 questLabel.BackgroundColor3 = Color3.fromRGB(35, 30, 24)
 questLabel.BackgroundTransparency = 0.15
 questLabel.BorderSizePixel = 0
@@ -108,6 +109,7 @@ local previewPromptNames = {
 	HouseUpgradePrompt = true,
 	CraftToolKitPrompt = true,
 	BuildForgePrompt = true,
+	SmeltMetalIngotPrompt = true,
 }
 local previewResources = {
 	{
@@ -133,6 +135,7 @@ local function updateStatsUi(data)
 	local wood = data.Wood or 0
 	local stone = data.Stone or 0
 	local metal = data.Metal or 0
+	local metalIngot = data.MetalIngot or 0
 	local houseLevel = data.HouseLevel or 1
 	local toolKitLevel = data.ToolKitLevel or 0
 	local forgeLevel = data.ForgeLevel or 0
@@ -143,11 +146,12 @@ local function updateStatsUi(data)
 	end
 
 	print(string.format(
-		"[ClientMain] Received stats update: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d ToolKitLevel=%d ForgeLevel=%d",
+		"[ClientMain] Received stats update: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d HouseLevel=%d ToolKitLevel=%d ForgeLevel=%d",
 		gold,
 		wood,
 		stone,
 		metal,
+		metalIngot,
 		houseLevel,
 		toolKitLevel,
 		forgeLevel
@@ -163,6 +167,7 @@ local function updateStatsUi(data)
 		toolKitText,
 		forgeLevel
 	)
+	statsLabel.Text = statsLabel.Text .. string.format("\nMetalIngot: %d", metalIngot)
 
 	if currentPreviewPromptName then
 		actionPreviewEvent:FireServer({
