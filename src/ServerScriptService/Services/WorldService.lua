@@ -895,7 +895,7 @@ end
 local function updateRockAccessForProfile(player, profile)
 	if profile.RockZoneUnlocked == true then
 		removeRockPass()
-		createRockZone()
+		ResourceService.CreateRockZoneResources(createRockZone(), true)
 	else
 		removeRockZone()
 		createRockPass()
@@ -962,7 +962,7 @@ function WorldService.TryClearRockPass(player)
 
 	if profile.RockZoneUnlocked == true then
 		removeRockPass()
-		createRockZone()
+		ResourceService.CreateRockZoneResources(createRockZone(), true)
 		return true
 	end
 
@@ -975,7 +975,7 @@ function WorldService.TryClearRockPass(player)
 	profile.RockZoneUnlocked = true
 	PlayerDataService.MarkDirty(player)
 	removeRockPass()
-	createRockZone()
+	ResourceService.CreateRockZoneResources(createRockZone(), true)
 
 	if PlayerDataService.SendProfileUpdate then
 		PlayerDataService.SendProfileUpdate(player)

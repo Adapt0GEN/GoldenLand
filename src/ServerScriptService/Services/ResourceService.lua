@@ -15,8 +15,10 @@ local OBJECTIVE_ID = "wood_collected"
 local TREE_RESPAWN_SECONDS = 10
 local STONE_RESPAWN_SECONDS = 10
 local METAL_RESPAWN_SECONDS = 10
+local ROCK_RESOURCE_RESPAWN_SECONDS = 15
 local GOLD_COOLDOWN_SECONDS = 2
 local FOREST_ZONE_RESOURCES_FOLDER_NAME = "ForestZoneResources"
+local ROCK_ZONE_RESOURCES_FOLDER_NAME = "RockZoneResources"
 local FOREST_AREA_ID = "ForestArea_01"
 local FOREST_AREA_DEFAULT_REMAINING_ACTIONS = 12
 local FOREST_AREA_DEBOUNCE_SECONDS = 0.6
@@ -48,6 +50,14 @@ local GOLD_NODE_POSITION = Vector3.new(36, 1.4, 18)
 local FOREST_STONE_POSITIONS = {
 	Vector3.new(-45, 1.1, 12),
 	Vector3.new(-33, 1.1, -2),
+}
+local ROCK_RICH_STONE_POSITIONS = {
+	Vector3.new(-86, 1.2, 2),
+	Vector3.new(-72, 1.2, 13),
+}
+local ROCK_METAL_VEIN_POSITIONS = {
+	Vector3.new(-82, 1.2, 14),
+	Vector3.new(-68, 1.2, 4),
 }
 local goldMineCooldownsByUserId = {}
 local forestAreaHarvestCooldownsByUserId = {}
@@ -151,6 +161,30 @@ local function respawnMetalAfterDelay(metalModel, prompt)
 	end)
 end
 
+local function setRockResourceAvailable(resourceModel, prompt, isAvailable)
+	for _, descendant in ipairs(resourceModel:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			descendant.Transparency = if isAvailable then 0 else 1
+			descendant.CanCollide = isAvailable
+			descendant.CanTouch = isAvailable
+			descendant.CanQuery = isAvailable
+		end
+	end
+
+	prompt.Enabled = isAvailable
+end
+
+local function respawnRockResourceAfterDelay(resourceModel, prompt, logMessage)
+	task.delay(ROCK_RESOURCE_RESPAWN_SECONDS, function()
+		if not resourceModel.Parent then
+			return
+		end
+
+		setRockResourceAvailable(resourceModel, prompt, true)
+		print(logMessage)
+	end)
+end
+
 local function updateQuestProgressIfActive(player, profile)
 	if profile.CompletedQuests[QUEST_ID] then
 		return
@@ -221,6 +255,52 @@ local function mineMetal(player, metalModel, prompt)
 	CurrencyService.AddMetal(player, 1)
 	print(string.format("[ResourceService] %s mined metal", player.Name))
 	respawnMetalAfterDelay(metalModel, prompt)
+end
+
+local function mineRichStone(player, richStoneModel, prompt)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		warn(string.format("[ResourceService] Profile for %s was not found. Rich stone was not mined.", player.Name))
+		return
+	end
+
+	if profile.RockZoneUnlocked ~= true then
+		warn(string.format("[ResourceService] %s cannot mine rich stone: RockZone is locked.", player.Name))
+		return
+	end
+
+	if not prompt.Enabled then
+		return
+	end
+
+	setRockResourceAvailable(richStoneModel, prompt, false)
+	CurrencyService.AddStone(player, 4)
+	print(string.format("[ResourceService] %s mined rich stone", player.Name))
+	respawnRockResourceAfterDelay(richStoneModel, prompt, "[ResourceService] RichStoneNode respawned")
+end
+
+local function mineMetalVein(player, metalVeinModel, prompt)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		warn(string.format("[ResourceService] Profile for %s was not found. Metal vein was not mined.", player.Name))
+		return
+	end
+
+	if profile.RockZoneUnlocked ~= true then
+		warn(string.format("[ResourceService] %s cannot mine metal vein: RockZone is locked.", player.Name))
+		return
+	end
+
+	if not prompt.Enabled then
+		return
+	end
+
+	setRockResourceAvailable(metalVeinModel, prompt, false)
+	CurrencyService.AddMetal(player, 3)
+	print(string.format("[ResourceService] %s mined metal vein", player.Name))
+	respawnRockResourceAfterDelay(metalVeinModel, prompt, "[ResourceService] MetalVein respawned")
 end
 
 local function canMineGold(player)
@@ -649,6 +729,90 @@ local function createForestStone(index, position, parent)
 	return stoneModel
 end
 
+local function createRichStoneNode(index, position, parent)
+	local richStoneModel = Instance.new("Model")
+	richStoneModel.Name = string.format("RichStoneNode_%d", index)
+	richStoneModel.Parent = parent
+
+	local stone = createPart(
+		"RichStone",
+		Vector3.new(5.2, 2.8, 4.4),
+		position,
+		Color3.fromRGB(130, 135, 140),
+		richStoneModel
+	)
+	stone.Shape = Enum.PartType.Ball
+	stone.Material = Enum.Material.Slate
+
+	local highlight = createPart(
+		"PaleStoneCore",
+		Vector3.new(2.2, 1.1, 1.4),
+		position + Vector3.new(0.4, 0.4, -1.6),
+		Color3.fromRGB(175, 180, 175),
+		richStoneModel
+	)
+	highlight.Material = Enum.Material.Rock
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "MineRichStonePrompt"
+	prompt.ObjectText = "Богатый камень"
+	prompt.ActionText = "Добыть камень"
+	prompt.HoldDuration = 0.6
+	prompt.MaxActivationDistance = 10
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = stone
+
+	prompt.Triggered:Connect(function(player)
+		mineRichStone(player, richStoneModel, prompt)
+	end)
+
+	richStoneModel.PrimaryPart = stone
+
+	return richStoneModel
+end
+
+local function createMetalVein(index, position, parent)
+	local metalVeinModel = Instance.new("Model")
+	metalVeinModel.Name = string.format("MetalVein_%d", index)
+	metalVeinModel.Parent = parent
+
+	local rock = createPart(
+		"VeinRock",
+		Vector3.new(4.8, 2.5, 3.8),
+		position,
+		Color3.fromRGB(85, 95, 105),
+		metalVeinModel
+	)
+	rock.Shape = Enum.PartType.Ball
+	rock.Material = Enum.Material.Slate
+
+	local vein = createPart(
+		"MetalVein",
+		Vector3.new(1.4, 1.6, 3.9),
+		position + Vector3.new(0.4, 0.3, 0),
+		Color3.fromRGB(115, 135, 155),
+		metalVeinModel
+	)
+	vein.Material = Enum.Material.Metal
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "MineMetalVeinPrompt"
+	prompt.ObjectText = "Металлическая жила"
+	prompt.ActionText = "Добыть металл"
+	prompt.HoldDuration = 0.7
+	prompt.MaxActivationDistance = 10
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = rock
+
+	prompt.Triggered:Connect(function(player)
+		mineMetalVein(player, metalVeinModel, prompt)
+	end)
+
+	metalVeinModel.PrimaryPart = rock
+
+	return metalVeinModel
+end
+
 function ResourceService.CreateResourceNodes()
 	local resourceNodes = Workspace:FindFirstChild(RESOURCE_FOLDER_NAME)
 
@@ -730,6 +894,44 @@ function ResourceService.CreateForestZoneResources(forestZone, forestUnlocked)
 
 	print("[ResourceService] Created ForestZone resources")
 	return forestResources
+end
+
+function ResourceService.CreateRockZoneResources(rockZone, rockZoneUnlocked)
+	if rockZoneUnlocked ~= true then
+		return nil
+	end
+
+	if not rockZone then
+		warn("[ResourceService] RockZone was not found. RockZone resources were not created.")
+		return nil
+	end
+
+	local rockResources = rockZone:FindFirstChild(ROCK_ZONE_RESOURCES_FOLDER_NAME)
+
+	if not rockResources then
+		rockResources = Instance.new("Folder")
+		rockResources.Name = ROCK_ZONE_RESOURCES_FOLDER_NAME
+		rockResources.Parent = rockZone
+	end
+
+	for index, position in ipairs(ROCK_RICH_STONE_POSITIONS) do
+		local nodeName = string.format("RichStoneNode_%d", index)
+
+		if not rockResources:FindFirstChild(nodeName) then
+			createRichStoneNode(index, position, rockResources)
+		end
+	end
+
+	for index, position in ipairs(ROCK_METAL_VEIN_POSITIONS) do
+		local veinName = string.format("MetalVein_%d", index)
+
+		if not rockResources:FindFirstChild(veinName) then
+			createMetalVein(index, position, rockResources)
+		end
+	end
+
+	print("[ResourceService] Created RockZone resources")
+	return rockResources
 end
 
 function ResourceService.HarvestForestArea(player)
