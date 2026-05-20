@@ -14,7 +14,7 @@ local RESOURCE_ORDER = {
 }
 
 local RESOURCE_LABELS = {
-	MetalIngot = "MetalIngot",
+	MetalIngot = "слитки",
 	Gold = "золото",
 	Wood = "дерево",
 	Stone = "камень",
