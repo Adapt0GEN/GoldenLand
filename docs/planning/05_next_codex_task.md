@@ -1,19 +1,22 @@
-# MVP 0.4.0-step-3 — Forge metal parts / Металлические детали
+# MVP 0.4.0-step-4 — Storage upgrade uses forge products
 
 ## Goal
 
-Add the second forge production action:
+Make the forge production chain useful by applying MetalIngot and MetalParts to the storage system.
 
-MetalIngot -> MetalParts
+Add the next storage upgrade step so the player can improve storage using processed forge resources.
 
-The player should be able to use the built forge to convert MetalIngot into MetalParts. MetalParts must be saved, restored, shown in UI, and updated through the server-side profile/resource flow.
+Production chain:
+
+RockZone -> Metal -> Forge -> MetalIngot -> MetalParts -> Storage upgrade
 
 ## Current context
 
 Already implemented:
 - Gold, Wood, Stone, Metal;
 - MetalIngot;
-- UI resources;
+- MetalParts;
+- resource UI;
 - profile saving/loading;
 - house;
 - storage;
@@ -21,34 +24,36 @@ Already implemented:
 - ToolKitLevel;
 - ForestZone;
 - RockZone;
-- Forge building foundation;
+- forge building foundation;
 - ForgeLevel = 1 after construction;
 - forge restores after restart;
 - forge smelting:
   Metal 5 -> MetalIngot 1;
-- player-visible forge smelting strings are Russian.
+- forge metal parts production:
+  MetalIngot 2 -> MetalParts 1;
+- player-visible forge strings are Russian.
 
 ## Scope
 
-Implement only:
-- MetalParts as a new processed resource;
-- forge production action:
-  - cost: MetalIngot = 2;
-  - result: MetalParts +1;
-- UI display for MetalParts;
-- saving/loading MetalParts.
+Implement only the next storage progression step.
+
+Codex must first inspect how storage is currently implemented.
+
+If the project already has `StorageLevel`, extend it safely.
+
+If the project only has a built/not-built storage flag, add a minimal `StorageLevel` progression in the same existing storage system without creating a parallel storage system.
 
 Do not implement:
-- using MetalParts in house upgrades;
-- using MetalParts in tool upgrades;
-- weapons;
-- armor;
+- new buildings;
+- new zones;
 - automation;
 - workers;
 - combat;
 - classes;
 - backpack;
-- food/fatigue.
+- food/fatigue;
+- new resource types;
+- storage capacity limits unless the existing project already has capacity logic.
 
 ## Files to inspect
 
@@ -58,13 +63,50 @@ Do not implement:
 - src/ServerScriptService/Services/PlayerDataService.lua
 - src/ServerScriptService/Services/CurrencyService.lua
 - src/ServerScriptService/Services/PlotService.lua
+- src/ServerScriptService/Services/BuildingService.lua
 - src/StarterPlayer/StarterPlayerScripts/ClientMain.client.lua
 
 ## Required changes
 
-### 1. PlayerDataService.lua
+### 1. Inspect existing storage logic
 
-Add new profile field:
+Find the current storage implementation.
+
+Use the existing project pattern.
+
+Do not create a second storage system.
+
+Determine whether the project currently uses:
+- `StorageLevel`;
+- `HasStorage`;
+- another storage-related field.
+
+Make the smallest safe change.
+
+### 2. Storage progression
+
+Add or extend storage progression so the player can upgrade storage to the next level.
+
+Preferred target:
+
+- if `StorageLevel` already exists:
+  - add upgrade from level 1 to level 2;
+
+- if storage is currently only built/not-built:
+  - introduce `StorageLevel`;
+  - existing built storage should behave as `StorageLevel = 1`;
+  - missing old saves should safely default to `StorageLevel = 0` or the current project equivalent.
+
+### 3. Storage level 2 cost
+
+Use this cost for upgrading storage to level 2:
 
 ```lua
-MetalParts = 0
+{
+    Wood = 40,
+    Stone = 40,
+    Metal = 15,
+    MetalIngot = 3,
+    MetalParts = 2,
+    Gold = 20,
+}
