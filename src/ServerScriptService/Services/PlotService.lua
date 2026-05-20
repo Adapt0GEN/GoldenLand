@@ -13,6 +13,7 @@ local PLOT_SIZE = Vector3.new(40, 1, 40)
 local MAX_HOUSE_LEVEL = 3
 local STORAGE_POSITION = PLOT_POSITION + Vector3.new(-12, 0, 14)
 local WORKSHOP_POSITION = PLOT_POSITION + Vector3.new(13, 0.8, 11)
+local FORGE_POSITION = PLOT_POSITION + Vector3.new(13, 0.8, -11)
 
 local STORAGE_BUILD_COST = {
 	Gold = 15,
@@ -24,6 +25,13 @@ local WORKSHOP_BUILD_COST = {
 	Gold = 25,
 	Wood = 15,
 	Stone = 10,
+}
+
+local FORGE_BUILD_COST = {
+	Gold = 10,
+	Wood = 20,
+	Stone = 30,
+	Metal = 15,
 }
 
 local TOOL_KIT_I_COST = {
@@ -203,6 +211,21 @@ local function buildToolKitPreview(player)
 	return nil
 end
 
+local function buildForgePreview(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile or (profile.ForgeLevel or 0) >= 1 then
+		return nil
+	end
+
+	return buildActionPreview(
+		player,
+		"Строительство кузницы",
+		"Кузница: уровень 0 -> 1",
+		FORGE_BUILD_COST
+	)
+end
+
 local function hideActionPreview(player)
 	sendActionPreview(player, {
 		visible = false,
@@ -268,6 +291,30 @@ local function addWorkshopBuildPrompt(promptPart)
 
 	prompt.Triggered:Connect(function(player)
 		PlotService.TryBuildWorkshop(player)
+	end)
+
+	return prompt
+end
+
+local function addForgeBuildPrompt(promptPart)
+	local existingPrompt = promptPart:FindFirstChild("BuildForgePrompt")
+
+	if existingPrompt then
+		return existingPrompt
+	end
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "BuildForgePrompt"
+	prompt.ObjectText = "Место для кузницы"
+	prompt.ActionText = "Построить кузницу"
+	prompt.HoldDuration = 0.7
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt.Enabled = true
+	prompt.Parent = promptPart
+
+	prompt.Triggered:Connect(function(player)
+		PlotService.TryBuildForge(player)
 	end)
 
 	return prompt
@@ -851,6 +898,195 @@ local function createWorkshopBuilding(player, plotModel)
 	return workshop
 end
 
+local function removeForgeBuildSite(plotModel)
+	local buildSite = plotModel:FindFirstChild("ForgeBuildSite")
+
+	if buildSite then
+		buildSite:Destroy()
+	end
+
+	local buildSign = plotModel:FindFirstChild("ForgeBuildSign")
+
+	if buildSign then
+		buildSign:Destroy()
+	end
+end
+
+local function createForgeBuildSign(plotModel)
+	local existingSign = plotModel:FindFirstChild("ForgeBuildSign")
+
+	if existingSign then
+		return existingSign
+	end
+
+	local signModel = Instance.new("Model")
+	signModel.Name = "ForgeBuildSign"
+	signModel.Parent = plotModel
+
+	local signPosition = FORGE_POSITION + Vector3.new(0, 1.4, -5.4)
+
+	createPart(
+		"ForgeBuildSignLeftPost",
+		Vector3.new(0.35, 2.4, 0.35),
+		signPosition + Vector3.new(-2.4, 0, 0),
+		Color3.fromRGB(90, 60, 35),
+		signModel
+	)
+
+	createPart(
+		"ForgeBuildSignRightPost",
+		Vector3.new(0.35, 2.4, 0.35),
+		signPosition + Vector3.new(2.4, 0, 0),
+		Color3.fromRGB(90, 60, 35),
+		signModel
+	)
+
+	local board = createPart(
+		"ForgeBuildSignBoard",
+		Vector3.new(5.8, 1.8, 0.35),
+		signPosition + Vector3.new(0, 1.05, 0),
+		Color3.fromRGB(210, 185, 120),
+		signModel
+	)
+
+	local surfaceGui = Instance.new("SurfaceGui")
+	surfaceGui.Name = "ForgeBuildSignSurface"
+	surfaceGui.Face = Enum.NormalId.Front
+	surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	surfaceGui.PixelsPerStud = 50
+	surfaceGui.Parent = board
+
+	local label = Instance.new("TextLabel")
+	label.Name = "ForgeBuildSignLabel"
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Text = "Место для кузницы"
+	label.TextScaled = true
+	label.Font = Enum.Font.SourceSansBold
+	label.TextColor3 = Color3.fromRGB(55, 35, 20)
+	label.Parent = surfaceGui
+
+	return signModel
+end
+
+local function createForgeBuildSite(player, plotModel)
+	if plotModel:FindFirstChild("Forge") then
+		removeForgeBuildSite(plotModel)
+		return nil
+	end
+
+	local existingBuildSite = plotModel:FindFirstChild("ForgeBuildSite")
+
+	if existingBuildSite then
+		addForgeBuildPrompt(existingBuildSite)
+		createForgeBuildSign(plotModel)
+		return existingBuildSite
+	end
+
+	local buildSite = createPart(
+		"ForgeBuildSite",
+		Vector3.new(9, 0.35, 8),
+		FORGE_POSITION,
+		Color3.fromRGB(195, 150, 85),
+		plotModel
+	)
+	buildSite.Material = Enum.Material.SmoothPlastic
+	buildSite.Transparency = 0.18
+	buildSite.CanCollide = false
+
+	addForgeBuildPrompt(buildSite)
+	createForgeBuildSign(plotModel)
+
+	print("[Forge] Created forge build site")
+	return buildSite
+end
+
+local function createForge(player, plotModel)
+	removeForgeBuildSite(plotModel)
+
+	local existingForge = plotModel:FindFirstChild("Forge")
+
+	if existingForge then
+		return existingForge
+	end
+
+	local forge = Instance.new("Model")
+	forge.Name = "Forge"
+	forge.Parent = plotModel
+
+	createPart(
+		"ForgeBase",
+		Vector3.new(10, 0.5, 8),
+		FORGE_POSITION + Vector3.new(0, 0.05, 0),
+		Color3.fromRGB(85, 80, 75),
+		forge
+	)
+
+	local hearth = createPart(
+		"ForgeHearth",
+		Vector3.new(5.5, 3.2, 4.5),
+		FORGE_POSITION + Vector3.new(-1.5, 1.9, 0),
+		Color3.fromRGB(55, 50, 48),
+		forge
+	)
+	hearth.Material = Enum.Material.Slate
+
+	local firebox = createPart(
+		"ForgeFirebox",
+		Vector3.new(3.2, 1.3, 0.35),
+		FORGE_POSITION + Vector3.new(-1.5, 1.35, -2.3),
+		Color3.fromRGB(210, 95, 40),
+		forge
+	)
+	firebox.Material = Enum.Material.Neon
+
+	local chimney = createPart(
+		"ForgeChimney",
+		Vector3.new(1.8, 4.5, 1.8),
+		FORGE_POSITION + Vector3.new(-1.5, 5.65, 0.8),
+		Color3.fromRGB(45, 45, 45),
+		forge
+	)
+	chimney.Material = Enum.Material.Slate
+
+	local anvil = createPart(
+		"ForgeAnvil",
+		Vector3.new(2.5, 1, 1.5),
+		FORGE_POSITION + Vector3.new(3.2, 1, 1.7),
+		Color3.fromRGB(70, 75, 80),
+		forge
+	)
+	anvil.Material = Enum.Material.Metal
+
+	local sign = createPart(
+		"ForgeSignBoard",
+		Vector3.new(5, 1.4, 0.35),
+		FORGE_POSITION + Vector3.new(0, 3.2, -4.2),
+		Color3.fromRGB(230, 195, 115),
+		forge
+	)
+
+	local surfaceGui = Instance.new("SurfaceGui")
+	surfaceGui.Name = "ForgeSignSurface"
+	surfaceGui.Face = Enum.NormalId.Front
+	surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	surfaceGui.PixelsPerStud = 50
+	surfaceGui.Parent = sign
+
+	local label = Instance.new("TextLabel")
+	label.Name = "ForgeSignLabel"
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Text = "Кузница"
+	label.TextScaled = true
+	label.Font = Enum.Font.SourceSansBold
+	label.TextColor3 = Color3.fromRGB(55, 35, 20)
+	label.Parent = surfaceGui
+
+	print(string.format("[Forge] Restored forge for %s", player.Name))
+	return forge
+end
+
 local function updateStorageVisual(player, profile)
 	local plotModel = getPlot(player)
 
@@ -887,6 +1123,28 @@ local function updateWorkshopVisual(player, profile)
 		createWorkshopBuildSpot(player, plotModel)
 	else
 		removeWorkshopBuildSpot(plotModel)
+	end
+
+	return true
+end
+
+local function updateForgeVisual(player, profile)
+	local plotModel = getPlot(player)
+
+	if not plotModel then
+		return false
+	end
+
+	if (profile.ForgeLevel or 0) >= 1 then
+		createForge(player, plotModel)
+	else
+		local existingForge = plotModel:FindFirstChild("Forge")
+
+		if existingForge then
+			existingForge:Destroy()
+		end
+
+		createForgeBuildSite(player, plotModel)
 	end
 
 	return true
@@ -958,6 +1216,7 @@ function PlotService.CreateTestPlot(player)
 		print(string.format("[PlotService] Test plot for %s already exists.", player.Name))
 		updateStorageVisual(player, profile)
 		updateWorkshopVisual(player, profile)
+		updateForgeVisual(player, profile)
 		return existingPlot
 	end
 
@@ -980,6 +1239,7 @@ function PlotService.CreateTestPlot(player)
 	rebuildHouse(plotModel, profile.HouseLevel)
 	updateStorageVisual(player, profile)
 	updateWorkshopVisual(player, profile)
+	updateForgeVisual(player, profile)
 
 	print(string.format("[PlotService] Created test plot for %s.", player.Name))
 	return plotModel
@@ -1070,6 +1330,89 @@ function PlotService.TryBuildStorage(player)
 		player.Name,
 		formatCost(STORAGE_BUILD_COST)
 	))
+
+	return true
+end
+
+function PlotService.CanBuildForge(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return false, "профиль не найден"
+	end
+
+	if not profile.PlotUnlocked then
+		return false, "участок еще не открыт"
+	end
+
+	if (profile.ForgeLevel or 0) >= 1 then
+		return false, "кузница уже построена"
+	end
+
+	if not CurrencyService.CanAfford(player, FORGE_BUILD_COST) then
+		return false, "не хватает ресурсов", FORGE_BUILD_COST, CurrencyService.FormatMissingResources(player, FORGE_BUILD_COST)
+	end
+
+	return true, "можно построить", FORGE_BUILD_COST
+end
+
+function PlotService.TryBuildForge(player)
+	print(string.format("[Forge] %s tried to build forge", player.Name))
+
+	local canBuild, reason, cost, missingResourcesMessage = PlotService.CanBuildForge(player)
+
+	if not canBuild then
+		if reason == "кузница уже построена" then
+			print(string.format("[Forge] %s tried to build forge, but forge already exists", player.Name))
+		elseif reason == "не хватает ресурсов" then
+			warn(string.format("[Forge] %s cannot build forge: not enough resources", player.Name))
+			sendPlayerMessage(player, string.format(
+				"Недостаточно ресурсов для строительства кузницы. %s. %s",
+				formatCost(cost),
+				missingResourcesMessage or CurrencyService.FormatMissingResources(player, cost)
+			))
+		else
+			warn(string.format("[Forge] %s cannot build forge: %s", player.Name, reason))
+			sendPlayerMessage(player, "Кузницу нельзя построить")
+		end
+
+		return false
+	end
+
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		warn(string.format("[Forge] Profile for %s was not found. Forge was not built.", player.Name))
+		return false
+	end
+
+	local resourcesSpent, spendMissingResourcesMessage = CurrencyService.SpendResources(player, cost)
+
+	if not resourcesSpent then
+		warn(string.format("[Forge] %s cannot build forge: not enough resources", player.Name))
+		sendPlayerMessage(player, string.format(
+			"Недостаточно ресурсов для строительства кузницы. %s. %s",
+			formatCost(cost),
+			spendMissingResourcesMessage or CurrencyService.FormatMissingResources(player, cost)
+		))
+		return false
+	end
+
+	profile.ForgeLevel = 1
+	PlayerDataService.MarkDirty(player)
+	updateForgeVisual(player, profile)
+
+	if PlayerDataService.SendProfileUpdate then
+		PlayerDataService.SendProfileUpdate(player)
+	end
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player, { Force = true })
+	end
+
+	sendPlayerMessage(player, "Кузница построена")
+	hideActionPreview(player)
+	print(string.format("[Forge] %s built forge", player.Name))
 
 	return true
 end
@@ -1401,6 +1744,8 @@ local function handleActionPreviewRequest(player, request)
 		previewData = buildHouseUpgradePreview(player)
 	elseif request.promptName == "CraftToolKitPrompt" then
 		previewData = buildToolKitPreview(player)
+	elseif request.promptName == "BuildForgePrompt" then
+		previewData = buildForgePreview(player)
 	else
 		return
 	end

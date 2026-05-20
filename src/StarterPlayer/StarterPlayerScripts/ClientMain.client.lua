@@ -20,7 +20,7 @@ screenGui.Parent = playerGui
 
 local statsLabel = Instance.new("TextLabel")
 statsLabel.Name = "StatsLabel"
-statsLabel.Size = UDim2.fromOffset(280, 160)
+statsLabel.Size = UDim2.fromOffset(280, 185)
 statsLabel.Position = UDim2.fromOffset(20, 20)
 statsLabel.BackgroundColor3 = Color3.fromRGB(28, 34, 30)
 statsLabel.BackgroundTransparency = 0.12
@@ -31,7 +31,7 @@ statsLabel.Font = Enum.Font.SourceSansBold
 statsLabel.TextWrapped = true
 statsLabel.TextXAlignment = Enum.TextXAlignment.Left
 statsLabel.TextYAlignment = Enum.TextYAlignment.Center
-statsLabel.Text = "Золото: 0\nДерево: 0\nКамень: 0\nМеталл: 0\nДом: уровень 1\nИнструменты: нет"
+statsLabel.Text = "Золото: 0\nДерево: 0\nКамень: 0\nМеталл: 0\nДом: уровень 1\nИнструменты: нет\nКузница: уровень 0"
 statsLabel.Parent = screenGui
 
 local questLabel = Instance.new("TextLabel")
@@ -107,6 +107,7 @@ local currentPreviewPromptName = nil
 local previewPromptNames = {
 	HouseUpgradePrompt = true,
 	CraftToolKitPrompt = true,
+	BuildForgePrompt = true,
 }
 local previewResources = {
 	{
@@ -134,6 +135,7 @@ local function updateStatsUi(data)
 	local metal = data.Metal or 0
 	local houseLevel = data.HouseLevel or 1
 	local toolKitLevel = data.ToolKitLevel or 0
+	local forgeLevel = data.ForgeLevel or 0
 	local toolKitText = "нет"
 
 	if toolKitLevel >= 1 then
@@ -141,23 +143,25 @@ local function updateStatsUi(data)
 	end
 
 	print(string.format(
-		"[ClientMain] Received stats update: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d ToolKitLevel=%d",
+		"[ClientMain] Received stats update: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d ToolKitLevel=%d ForgeLevel=%d",
 		gold,
 		wood,
 		stone,
 		metal,
 		houseLevel,
-		toolKitLevel
+		toolKitLevel,
+		forgeLevel
 	))
 
 	statsLabel.Text = string.format(
-		"Золото: %d\nДерево: %d\nКамень: %d\nМеталл: %d\nДом: уровень %d\nИнструменты: %s",
+		"Золото: %d\nДерево: %d\nКамень: %d\nМеталл: %d\nДом: уровень %d\nИнструменты: %s\nКузница: уровень %d",
 		gold,
 		wood,
 		stone,
 		metal,
 		houseLevel,
-		toolKitText
+		toolKitText,
+		forgeLevel
 	)
 
 	if currentPreviewPromptName then
