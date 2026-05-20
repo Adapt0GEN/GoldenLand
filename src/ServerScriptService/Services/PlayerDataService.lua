@@ -108,6 +108,7 @@ local function createDefaultProfile(player)
 		HouseLevel = 1,
 		PlotUnlocked = false,
 		StorageBuilt = false,
+		StorageLevel = 0,
 		WorkshopBuilt = false,
 		ToolKitLevel = 0,
 		ForgeLevel = 0,
@@ -154,7 +155,7 @@ local function logProfileValues(prefix, profile)
 	local forestState, forestTreeRemainingActions, forestStone01State, forestStone02State = getForestAreaLogValues(profile)
 
 	print(string.format(
-		"[PlayerDataService] %s: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d HouseLevel=%d ToolKitLevel=%d ForgeLevel=%d ForestUnlocked=%s ForestZoneState=%s ForestArea_01.State=%s ForestTreeCluster.RemainingActions=%d ForestStone_01.State=%s ForestStone_02.State=%s",
+		"[PlayerDataService] %s: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d HouseLevel=%d StorageLevel=%d ToolKitLevel=%d ForgeLevel=%d ForestUnlocked=%s ForestZoneState=%s ForestArea_01.State=%s ForestTreeCluster.RemainingActions=%d ForestStone_01.State=%s ForestStone_02.State=%s",
 		prefix,
 		profile.Gold or 0,
 		profile.Wood or 0,
@@ -163,6 +164,7 @@ local function logProfileValues(prefix, profile)
 		profile.MetalIngot or 0,
 		profile.MetalParts or 0,
 		profile.HouseLevel or 1,
+		profile.StorageLevel or 0,
 		profile.ToolKitLevel or 0,
 		profile.ForgeLevel or 0,
 		tostring(profile.ForestUnlocked == true),
@@ -371,6 +373,7 @@ local function normalizeLoadedProfile(player, savedProfile)
 	applyNumber(profile, savedProfile, "MetalIngot")
 	applyNumber(profile, savedProfile, "MetalParts")
 	applyNumber(profile, savedProfile, "HouseLevel")
+	applyNumber(profile, savedProfile, "StorageLevel")
 	applyNumber(profile, savedProfile, "ToolKitLevel")
 	applyNumber(profile, savedProfile, "ForgeLevel")
 
@@ -380,6 +383,12 @@ local function normalizeLoadedProfile(player, savedProfile)
 
 	if type(savedProfile.StorageBuilt) == "boolean" then
 		profile.StorageBuilt = savedProfile.StorageBuilt
+	end
+
+	if profile.StorageBuilt and (profile.StorageLevel or 0) < 1 then
+		profile.StorageLevel = 1
+	elseif (profile.StorageLevel or 0) >= 1 then
+		profile.StorageBuilt = true
 	end
 
 	if type(savedProfile.WorkshopBuilt) == "boolean" then
@@ -425,6 +434,7 @@ local function createSaveData(profile)
 		HouseLevel = profile.HouseLevel,
 		PlotUnlocked = profile.PlotUnlocked,
 		StorageBuilt = profile.StorageBuilt,
+		StorageLevel = profile.StorageLevel,
 		WorkshopBuilt = profile.WorkshopBuilt,
 		ToolKitLevel = profile.ToolKitLevel,
 		ForgeLevel = profile.ForgeLevel,
@@ -533,6 +543,7 @@ function PlayerDataService.GetPublicProfile(player)
 		HouseLevel = profile.HouseLevel,
 		PlotUnlocked = profile.PlotUnlocked,
 		StorageBuilt = profile.StorageBuilt,
+		StorageLevel = profile.StorageLevel,
 		WorkshopBuilt = profile.WorkshopBuilt,
 		ToolKitLevel = profile.ToolKitLevel,
 		ForgeLevel = profile.ForgeLevel,
@@ -553,7 +564,7 @@ function PlayerDataService.SendProfileUpdate(player)
 
 	getRemoteEvent("PlayerStatsUpdateEvent"):FireClient(player, publicProfile)
 	print(string.format(
-		"[PlayerDataService] Sent stats update: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d HouseLevel=%d ToolKitLevel=%d ForgeLevel=%d",
+		"[PlayerDataService] Sent stats update: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d HouseLevel=%d StorageLevel=%d ToolKitLevel=%d ForgeLevel=%d",
 		publicProfile.Gold,
 		publicProfile.Wood,
 		publicProfile.Stone,
@@ -561,6 +572,7 @@ function PlayerDataService.SendProfileUpdate(player)
 		publicProfile.MetalIngot,
 		publicProfile.MetalParts,
 		publicProfile.HouseLevel,
+		publicProfile.StorageLevel,
 		publicProfile.ToolKitLevel,
 		publicProfile.ForgeLevel
 	))

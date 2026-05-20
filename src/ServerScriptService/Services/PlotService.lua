@@ -11,6 +11,7 @@ local PlotService = {}
 local PLOT_POSITION = Vector3.new(0, 0, 80)
 local PLOT_SIZE = Vector3.new(40, 1, 40)
 local MAX_HOUSE_LEVEL = 3
+local MAX_STORAGE_LEVEL = 2
 local STORAGE_POSITION = PLOT_POSITION + Vector3.new(-12, 0, 14)
 local WORKSHOP_POSITION = PLOT_POSITION + Vector3.new(13, 0.8, 11)
 local FORGE_POSITION = PLOT_POSITION + Vector3.new(13, 0.8, -11)
@@ -19,6 +20,15 @@ local STORAGE_BUILD_COST = {
 	Gold = 15,
 	Wood = 10,
 	Stone = 5,
+}
+
+local STORAGE_LEVEL_2_COST = {
+	Wood = 40,
+	Stone = 40,
+	Metal = 15,
+	MetalIngot = 3,
+	MetalParts = 2,
+	Gold = 20,
 }
 
 local WORKSHOP_BUILD_COST = {
@@ -268,6 +278,27 @@ local function buildForgePartsPreview(player)
 	)
 end
 
+local function buildStorageUpgradePreview(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile or profile.StorageBuilt ~= true then
+		return nil
+	end
+
+	local storageLevel = profile.StorageLevel or 1
+
+	if storageLevel >= MAX_STORAGE_LEVEL then
+		return nil
+	end
+
+	return buildActionPreview(
+		player,
+		"Улучшение склада",
+		string.format("Склад: уровень %d -> %d", storageLevel, storageLevel + 1),
+		STORAGE_LEVEL_2_COST
+	)
+end
+
 local function hideActionPreview(player)
 	sendActionPreview(player, {
 		visible = false,
@@ -312,6 +343,38 @@ local function addStorageBuildPrompt(promptPart)
 	end)
 
 	return prompt
+end
+
+local function addStorageUpgradePrompt(promptPart)
+	local existingPrompt = promptPart:FindFirstChild("StorageUpgradePrompt")
+
+	if existingPrompt then
+		return existingPrompt
+	end
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "StorageUpgradePrompt"
+	prompt.ObjectText = "Склад"
+	prompt.ActionText = "Улучшить склад"
+	prompt.HoldDuration = 0.7
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt.Enabled = true
+	prompt.Parent = promptPart
+
+	prompt.Triggered:Connect(function(player)
+		PlotService.TryUpgradeStorage(player)
+	end)
+
+	return prompt
+end
+
+local function removeStorageUpgradePrompt(storage)
+	local upgradePrompt = storage:FindFirstChild("StorageUpgradePrompt", true)
+
+	if upgradePrompt then
+		upgradePrompt:Destroy()
+	end
 end
 
 local function addWorkshopBuildPrompt(promptPart)
@@ -778,12 +841,66 @@ local function createStorageBuildSpot(plotModel)
 	return buildSpot
 end
 
-local function createStorageBuilding(plotModel)
+local function updateStorageLevelVisual(storage, storageLevel)
+	local existingReinforcement = storage:FindFirstChild("StorageReinforcement")
+	local existingExtraCrate = storage:FindFirstChild("StorageExtraCrate")
+
+	if storageLevel < 2 then
+		if existingReinforcement then
+			existingReinforcement:Destroy()
+		end
+
+		if existingExtraCrate then
+			existingExtraCrate:Destroy()
+		end
+
+		return
+	end
+
+	if not existingReinforcement then
+		createPart(
+			"StorageReinforcement",
+			Vector3.new(8.6, 0.35, 6.6),
+			STORAGE_POSITION + Vector3.new(0, 5.55, 0),
+			Color3.fromRGB(95, 95, 100),
+			storage
+		).Material = Enum.Material.Metal
+	end
+
+	if not existingExtraCrate then
+		createPart(
+			"StorageExtraCrate",
+			Vector3.new(2.2, 1.4, 1.8),
+			STORAGE_POSITION + Vector3.new(-3, 1.1, 1.4),
+			Color3.fromRGB(130, 90, 50),
+			storage
+		)
+	end
+end
+
+local function updateStoragePrompt(storage, storageLevel)
+	local storageBody = storage:FindFirstChild("StorageBody")
+
+	if not storageBody then
+		return
+	end
+
+	if storageLevel < MAX_STORAGE_LEVEL then
+		addStorageUpgradePrompt(storageBody)
+	else
+		removeStorageUpgradePrompt(storage)
+	end
+end
+
+local function createStorageBuilding(plotModel, storageLevel)
 	removeStorageBuildSpot(plotModel)
+	storageLevel = storageLevel or 1
 
 	local existingStorage = plotModel:FindFirstChild("StorageBuilding")
 
 	if existingStorage then
+		updateStorageLevelVisual(existingStorage, storageLevel)
+		updateStoragePrompt(existingStorage, storageLevel)
 		return existingStorage
 	end
 
@@ -822,6 +939,9 @@ local function createStorageBuilding(plotModel)
 		Color3.fromRGB(160, 105, 55),
 		storage
 	)
+
+	updateStorageLevelVisual(storage, storageLevel)
+	updateStoragePrompt(storage, storageLevel)
 
 	return storage
 end
@@ -1203,7 +1323,7 @@ local function updateStorageVisual(player, profile)
 	end
 
 	if profile.StorageBuilt then
-		createStorageBuilding(plotModel)
+		createStorageBuilding(plotModel, profile.StorageLevel or 1)
 	else
 		createStorageBuildSpot(plotModel)
 	end
@@ -1419,6 +1539,7 @@ function PlotService.TryBuildStorage(player)
 	end
 
 	profile.StorageBuilt = true
+	profile.StorageLevel = math.max(profile.StorageLevel or 0, 1)
 	PlayerDataService.MarkDirty(player)
 	updateStorageVisual(player, profile)
 	updateWorkshopVisual(player, profile)
@@ -1438,6 +1559,93 @@ function PlotService.TryBuildStorage(player)
 		player.Name,
 		formatCost(STORAGE_BUILD_COST)
 	))
+
+	return true
+end
+
+function PlotService.CanUpgradeStorage(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return false, "профиль не найден"
+	end
+
+	if not profile.StorageBuilt then
+		return false, "склад не построен"
+	end
+
+	local storageLevel = profile.StorageLevel or 1
+
+	if storageLevel >= MAX_STORAGE_LEVEL then
+		return false, "склад уже улучшен до максимума"
+	end
+
+	if not CurrencyService.CanAfford(player, STORAGE_LEVEL_2_COST) then
+		return false, "не хватает ресурсов", STORAGE_LEVEL_2_COST, CurrencyService.FormatMissingResources(player, STORAGE_LEVEL_2_COST)
+	end
+
+	return true, "можно улучшить", STORAGE_LEVEL_2_COST, nil, storageLevel + 1
+end
+
+function PlotService.TryUpgradeStorage(player)
+	print(string.format("[PlotService] %s tried to upgrade storage.", player.Name))
+
+	local canUpgrade, reason, cost, missingResourcesMessage, nextStorageLevel = PlotService.CanUpgradeStorage(player)
+
+	if not canUpgrade then
+		if reason == "склад не построен" then
+			warn(string.format("[PlotService] %s cannot upgrade storage: storage is not built.", player.Name))
+			sendPlayerMessage(player, "Сначала постройте склад")
+		elseif reason == "склад уже улучшен до максимума" then
+			print(string.format("[PlotService] %s tried to upgrade storage, but storage is already max level.", player.Name))
+			sendPlayerMessage(player, "Склад уже улучшен")
+		elseif reason == "не хватает ресурсов" then
+			warn(string.format("[PlotService] %s cannot upgrade storage: not enough resources.", player.Name))
+			sendPlayerMessage(player, string.format(
+				"Недостаточно ресурсов для улучшения склада. %s. %s",
+				formatCost(cost),
+				missingResourcesMessage or CurrencyService.FormatMissingResources(player, cost)
+			))
+		else
+			warn(string.format("[PlotService] %s cannot upgrade storage: %s.", player.Name, reason))
+			sendPlayerMessage(player, "Склад нельзя улучшить")
+		end
+
+		return false
+	end
+
+	local resourcesSpent, spendMissingResourcesMessage = CurrencyService.SpendResources(player, cost)
+
+	if not resourcesSpent then
+		sendPlayerMessage(player, string.format(
+			"Недостаточно ресурсов для улучшения склада. %s",
+			spendMissingResourcesMessage or CurrencyService.FormatMissingResources(player, cost)
+		))
+		return false
+	end
+
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return false
+	end
+
+	profile.StorageLevel = nextStorageLevel
+	profile.StorageBuilt = true
+	PlayerDataService.MarkDirty(player)
+	updateStorageVisual(player, profile)
+
+	if PlayerDataService.SendProfileUpdate then
+		PlayerDataService.SendProfileUpdate(player)
+	end
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player)
+	end
+
+	sendPlayerMessage(player, string.format("Склад улучшен до уровня %d", profile.StorageLevel))
+	hideActionPreview(player)
+	print(string.format("[PlotService] %s upgraded storage to level %d.", player.Name, profile.StorageLevel))
 
 	return true
 end
@@ -1988,6 +2196,8 @@ local function handleActionPreviewRequest(player, request)
 		previewData = buildForgeSmeltPreview(player)
 	elseif request.promptName == "MakeMetalPartsPrompt" then
 		previewData = buildForgePartsPreview(player)
+	elseif request.promptName == "StorageUpgradePrompt" then
+		previewData = buildStorageUpgradePreview(player)
 	else
 		return
 	end

@@ -20,7 +20,7 @@ screenGui.Parent = playerGui
 
 local statsLabel = Instance.new("TextLabel")
 statsLabel.Name = "StatsLabel"
-statsLabel.Size = UDim2.fromOffset(280, 225)
+statsLabel.Size = UDim2.fromOffset(280, 245)
 statsLabel.Position = UDim2.fromOffset(20, 20)
 statsLabel.BackgroundColor3 = Color3.fromRGB(28, 34, 30)
 statsLabel.BackgroundTransparency = 0.12
@@ -34,12 +34,13 @@ statsLabel.TextYAlignment = Enum.TextYAlignment.Center
 statsLabel.Text = "Золото: 0\nДерево: 0\nКамень: 0\nМеталл: 0\nДом: уровень 1\nИнструменты: нет\nКузница: уровень 0"
 statsLabel.Text = statsLabel.Text .. "\nСлитки: 0"
 statsLabel.Text = statsLabel.Text .. "\nДетали: 0"
+statsLabel.Text = statsLabel.Text .. "\nСклад: уровень 0"
 statsLabel.Parent = screenGui
 
 local questLabel = Instance.new("TextLabel")
 questLabel.Name = "QuestLabel"
 questLabel.Size = UDim2.fromOffset(320, 90)
-questLabel.Position = UDim2.fromOffset(20, 235)
+questLabel.Position = UDim2.fromOffset(20, 255)
 questLabel.BackgroundColor3 = Color3.fromRGB(35, 30, 24)
 questLabel.BackgroundTransparency = 0.15
 questLabel.BorderSizePixel = 0
@@ -112,6 +113,7 @@ local previewPromptNames = {
 	BuildForgePrompt = true,
 	SmeltMetalIngotPrompt = true,
 	MakeMetalPartsPrompt = true,
+	StorageUpgradePrompt = true,
 }
 local previewResources = {
 	{
@@ -131,6 +133,10 @@ local previewResources = {
 		label = "Слитки",
 	},
 	{
+		key = "MetalParts",
+		label = "Детали",
+	},
+	{
 		key = "Gold",
 		label = "Золото",
 	},
@@ -144,6 +150,7 @@ local function updateStatsUi(data)
 	local metalIngot = data.MetalIngot or 0
 	local metalParts = data.MetalParts or 0
 	local houseLevel = data.HouseLevel or 1
+	local storageLevel = data.StorageLevel or 0
 	local toolKitLevel = data.ToolKitLevel or 0
 	local forgeLevel = data.ForgeLevel or 0
 	local toolKitText = "нет"
@@ -153,7 +160,7 @@ local function updateStatsUi(data)
 	end
 
 	print(string.format(
-		"[ClientMain] Received stats update: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d HouseLevel=%d ToolKitLevel=%d ForgeLevel=%d",
+		"[ClientMain] Received stats update: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d HouseLevel=%d StorageLevel=%d ToolKitLevel=%d ForgeLevel=%d",
 		gold,
 		wood,
 		stone,
@@ -161,6 +168,7 @@ local function updateStatsUi(data)
 		metalIngot,
 		metalParts,
 		houseLevel,
+		storageLevel,
 		toolKitLevel,
 		forgeLevel
 	))
@@ -177,6 +185,7 @@ local function updateStatsUi(data)
 	)
 	statsLabel.Text = statsLabel.Text .. string.format("\nСлитки: %d", metalIngot)
 	statsLabel.Text = statsLabel.Text .. string.format("\nДетали: %d", metalParts)
+	statsLabel.Text = statsLabel.Text .. string.format("\nСклад: уровень %d", storageLevel)
 
 	if currentPreviewPromptName then
 		actionPreviewEvent:FireServer({
