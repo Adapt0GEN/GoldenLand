@@ -1,17 +1,18 @@
-# MVP 0.4.0-step-2 — Forge smelting / Плавка металла
+# MVP 0.4.0-step-3 — Forge metal parts / Металлические детали
 
 ## Goal
 
-Add the first forge production action:
+Add the second forge production action:
 
-Metal -> MetalIngot
+MetalIngot -> MetalParts
 
-The player should be able to use the built forge to smelt raw Metal into MetalIngot. MetalIngot must be saved, restored, shown in UI, and updated through the server-side profile/resource flow.
+The player should be able to use the built forge to convert MetalIngot into MetalParts. MetalParts must be saved, restored, shown in UI, and updated through the server-side profile/resource flow.
 
 ## Current context
 
 Already implemented:
 - Gold, Wood, Stone, Metal;
+- MetalIngot;
 - UI resources;
 - profile saving/loading;
 - house;
@@ -20,27 +21,28 @@ Already implemented:
 - ToolKitLevel;
 - ForestZone;
 - RockZone;
-- RichStoneNode gives +4 Stone;
-- MetalVein gives +3 Metal;
 - Forge building foundation;
 - ForgeLevel = 1 after construction;
-- forge restores after restart.
+- forge restores after restart;
+- forge smelting:
+  Metal 5 -> MetalIngot 1;
+- player-visible forge smelting strings are Russian.
 
 ## Scope
 
 Implement only:
-- MetalIngot as a new processed resource;
-- forge smelting action:
-  - cost: Metal = 5;
-  - result: MetalIngot +1;
-- UI display for MetalIngot;
-- saving/loading MetalIngot.
+- MetalParts as a new processed resource;
+- forge production action:
+  - cost: MetalIngot = 2;
+  - result: MetalParts +1;
+- UI display for MetalParts;
+- saving/loading MetalParts.
 
 Do not implement:
-- MetalParts;
+- using MetalParts in house upgrades;
+- using MetalParts in tool upgrades;
 - weapons;
 - armor;
-- house upgrades using ingots;
 - automation;
 - workers;
 - combat;
@@ -65,4 +67,4 @@ Do not implement:
 Add new profile field:
 
 ```lua
-MetalIngot = 0
+MetalParts = 0
