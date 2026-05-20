@@ -1,6 +1,7 @@
 -- ClientMain.client.lua
 -- Точка входа клиентской логики проекта «Златоземье: Своя Земля».
 local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local localPlayer = Players.LocalPlayer
@@ -10,6 +11,7 @@ local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local questUpdateEvent = remotes:WaitForChild("QuestUpdateEvent")
 local playerStatsUpdateEvent = remotes:WaitForChild("PlayerStatsUpdateEvent")
 local playerMessageEvent = remotes:WaitForChild("PlayerMessageEvent")
+local actionPreviewEvent = remotes:WaitForChild("ActionPreviewEvent")
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "QuestScreenGui"
@@ -62,8 +64,68 @@ messageLabel.TextWrapped = true
 messageLabel.Visible = false
 messageLabel.Parent = screenGui
 
+local actionPreviewFrame = Instance.new("Frame")
+actionPreviewFrame.Name = "ActionPreviewFrame"
+actionPreviewFrame.Size = UDim2.fromOffset(330, 230)
+actionPreviewFrame.Position = UDim2.new(1, -350, 0, 20)
+actionPreviewFrame.BackgroundColor3 = Color3.fromRGB(30, 32, 34)
+actionPreviewFrame.BackgroundTransparency = 0.08
+actionPreviewFrame.BorderSizePixel = 0
+actionPreviewFrame.Visible = false
+actionPreviewFrame.Parent = screenGui
+
+local actionPreviewTitle = Instance.new("TextLabel")
+actionPreviewTitle.Name = "ActionPreviewTitle"
+actionPreviewTitle.Size = UDim2.new(1, -20, 0, 34)
+actionPreviewTitle.Position = UDim2.fromOffset(10, 8)
+actionPreviewTitle.BackgroundTransparency = 1
+actionPreviewTitle.TextColor3 = Color3.fromRGB(255, 235, 180)
+actionPreviewTitle.TextSize = 20
+actionPreviewTitle.Font = Enum.Font.SourceSansBold
+actionPreviewTitle.TextXAlignment = Enum.TextXAlignment.Left
+actionPreviewTitle.TextYAlignment = Enum.TextYAlignment.Center
+actionPreviewTitle.Text = ""
+actionPreviewTitle.Parent = actionPreviewFrame
+
+local actionPreviewBody = Instance.new("TextLabel")
+actionPreviewBody.Name = "ActionPreviewBody"
+actionPreviewBody.Size = UDim2.new(1, -20, 1, -52)
+actionPreviewBody.Position = UDim2.fromOffset(10, 44)
+actionPreviewBody.BackgroundTransparency = 1
+actionPreviewBody.TextColor3 = Color3.fromRGB(230, 235, 230)
+actionPreviewBody.TextSize = 17
+actionPreviewBody.Font = Enum.Font.SourceSans
+actionPreviewBody.TextWrapped = true
+actionPreviewBody.TextXAlignment = Enum.TextXAlignment.Left
+actionPreviewBody.TextYAlignment = Enum.TextYAlignment.Top
+actionPreviewBody.Text = ""
+actionPreviewBody.Parent = actionPreviewFrame
+
 local hideRequestId = 0
 local messageHideRequestId = 0
+local currentPreviewPromptName = nil
+local previewPromptNames = {
+	HouseUpgradePrompt = true,
+	CraftToolKitPrompt = true,
+}
+local previewResources = {
+	{
+		key = "Wood",
+		label = "Дерево",
+	},
+	{
+		key = "Stone",
+		label = "Камень",
+	},
+	{
+		key = "Metal",
+		label = "Металл",
+	},
+	{
+		key = "Gold",
+		label = "Золото",
+	},
+}
 
 local function updateStatsUi(data)
 	local gold = data.Gold or 0
@@ -97,6 +159,13 @@ local function updateStatsUi(data)
 		houseLevel,
 		toolKitText
 	)
+
+	if currentPreviewPromptName then
+		actionPreviewEvent:FireServer({
+			action = "show",
+			promptName = currentPreviewPromptName,
+		})
+	end
 end
 
 local function showPlayerMessage(message)
@@ -111,6 +180,48 @@ local function showPlayerMessage(message)
 			messageLabel.Visible = false
 		end
 	end)
+end
+
+local function getResourceAmount(resourceTable, resourceName)
+	if type(resourceTable) ~= "table" then
+		return 0
+	end
+
+	return resourceTable[resourceName] or 0
+end
+
+local function updateActionPreview(data)
+	if type(data) ~= "table" or data.visible ~= true then
+		actionPreviewFrame.Visible = false
+		return
+	end
+
+	local lines = {}
+
+	if data.description and data.description ~= "" then
+		table.insert(lines, tostring(data.description))
+	end
+
+	table.insert(lines, data.canAfford and "Ресурсов хватает" or "Не хватает ресурсов")
+	table.insert(lines, "")
+
+	for _, resource in ipairs(previewResources) do
+		local currentAmount = getResourceAmount(data.current, resource.key)
+		local requiredAmount = getResourceAmount(data.cost, resource.key)
+		local missingAmount = getResourceAmount(data.missing, resource.key)
+		local line = string.format("%s: %d / %d", resource.label, currentAmount, requiredAmount)
+
+		if missingAmount > 0 then
+			line = string.format("%s (не хватает %d)", line, missingAmount)
+		end
+
+		table.insert(lines, line)
+	end
+
+	actionPreviewTitle.Text = tostring(data.title or "Действие")
+	actionPreviewBody.Text = table.concat(lines, "\n")
+	actionPreviewFrame.BackgroundColor3 = if data.canAfford then Color3.fromRGB(30, 42, 34) else Color3.fromRGB(45, 34, 30)
+	actionPreviewFrame.Visible = true
 end
 
 local function setQuestText(text)
@@ -156,5 +267,29 @@ end
 questUpdateEvent.OnClientEvent:Connect(updateQuestUi)
 playerStatsUpdateEvent.OnClientEvent:Connect(updateStatsUi)
 playerMessageEvent.OnClientEvent:Connect(showPlayerMessage)
+actionPreviewEvent.OnClientEvent:Connect(updateActionPreview)
+
+ProximityPromptService.PromptShown:Connect(function(prompt)
+	if previewPromptNames[prompt.Name] then
+		currentPreviewPromptName = prompt.Name
+		actionPreviewEvent:FireServer({
+			action = "show",
+			promptName = prompt.Name,
+		})
+	end
+end)
+
+ProximityPromptService.PromptHidden:Connect(function(prompt)
+	if previewPromptNames[prompt.Name] then
+		if currentPreviewPromptName == prompt.Name then
+			currentPreviewPromptName = nil
+		end
+
+		actionPreviewEvent:FireServer({
+			action = "hide",
+			promptName = prompt.Name,
+		})
+	end
+end)
 
 print(string.format("[GoldenLand] Клиент MVP 0.1 запущен для игрока: %s", localPlayer.Name))

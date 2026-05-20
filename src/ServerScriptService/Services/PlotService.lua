@@ -77,6 +77,10 @@ local function sendPlayerMessage(player, message)
 	getRemoteEvent("PlayerMessageEvent"):FireClient(player, message)
 end
 
+local function sendActionPreview(player, previewData)
+	getRemoteEvent("ActionPreviewEvent"):FireClient(player, previewData)
+end
+
 local function getPlotName(player)
 	return string.format("Plot_%d", player.UserId)
 end
@@ -105,6 +109,104 @@ end
 
 local function formatCost(cost)
 	return CurrencyService.FormatCost(cost)
+end
+
+local function buildResourceSnapshot(profile)
+	return {
+		Gold = profile.Gold or 0,
+		Wood = profile.Wood or 0,
+		Stone = profile.Stone or 0,
+		Metal = profile.Metal or 0,
+	}
+end
+
+local function buildMissingResourceSnapshot(player, cost)
+	local missing = {
+		Gold = 0,
+		Wood = 0,
+		Stone = 0,
+		Metal = 0,
+	}
+
+	for _, missingResource in ipairs(CurrencyService.GetMissingResources(player, cost)) do
+		missing[missingResource.Name] = missingResource.Amount
+	end
+
+	return missing
+end
+
+local function buildActionPreview(player, title, description, cost)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile or not cost then
+		return nil
+	end
+
+	return {
+		visible = true,
+		title = title,
+		description = description,
+		cost = cost,
+		current = buildResourceSnapshot(profile),
+		missing = buildMissingResourceSnapshot(player, cost),
+		canAfford = CurrencyService.CanAfford(player, cost),
+	}
+end
+
+local function buildHouseUpgradePreview(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return nil
+	end
+
+	local currentLevel = profile.HouseLevel or 1
+	local cost = getUpgradeCost(currentLevel)
+
+	if currentLevel >= MAX_HOUSE_LEVEL or not cost then
+		return nil
+	end
+
+	return buildActionPreview(
+		player,
+		"Улучшение дома",
+		string.format("Дом: уровень %d -> %d", currentLevel, currentLevel + 1),
+		cost
+	)
+end
+
+local function buildToolKitPreview(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return nil
+	end
+
+	local toolKitLevel = profile.ToolKitLevel or 0
+
+	if toolKitLevel == 0 then
+		return buildActionPreview(
+			player,
+			"Создание инструментов I",
+			"Инструменты: нет -> уровень 1",
+			TOOL_KIT_I_COST
+		)
+	elseif toolKitLevel == 1 then
+		return buildActionPreview(
+			player,
+			"Улучшение инструментов II",
+			"Инструменты: уровень 1 -> 2",
+			TOOL_KIT_II_COST
+		)
+	end
+
+	return nil
+end
+
+local function hideActionPreview(player)
+	sendActionPreview(player, {
+		visible = false,
+	})
 end
 
 local function addHouseUpgradePrompt(promptPart)
@@ -1160,6 +1262,7 @@ function PlotService.TryCraftToolKit(player)
 		sendPlayerMessage(player, "Набор инструментов I изготовлен")
 	end
 
+	hideActionPreview(player)
 	print(string.format("[PlotService] %s crafted ToolKitLevel %d.", player.Name, nextToolKitLevel))
 
 	return true
@@ -1246,6 +1349,7 @@ function PlotService.TryUpgradeHouse(player)
 	end
 
 	sendPlayerMessage(player, string.format("Дом улучшен до уровня %d", profile.HouseLevel))
+	hideActionPreview(player)
 
 	print(string.format(
 		"[PlotService] %s upgraded house from level %d to %d. Cost: %s.",
@@ -1276,5 +1380,38 @@ function PlotService.RemovePlot(player)
 
 	return true
 end
+
+local function handleActionPreviewRequest(player, request)
+	if type(request) ~= "table" then
+		return
+	end
+
+	if request.action == "hide" then
+		hideActionPreview(player)
+		return
+	end
+
+	if request.action ~= "show" then
+		return
+	end
+
+	local previewData = nil
+
+	if request.promptName == "HouseUpgradePrompt" then
+		previewData = buildHouseUpgradePreview(player)
+	elseif request.promptName == "CraftToolKitPrompt" then
+		previewData = buildToolKitPreview(player)
+	else
+		return
+	end
+
+	if previewData then
+		sendActionPreview(player, previewData)
+	else
+		hideActionPreview(player)
+	end
+end
+
+getRemoteEvent("ActionPreviewEvent").OnServerEvent:Connect(handleActionPreviewRequest)
 
 return PlotService

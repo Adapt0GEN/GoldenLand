@@ -27,6 +27,7 @@ end
 ensureRemoteEvent("QuestUpdateEvent")
 ensureRemoteEvent("PlayerStatsUpdateEvent")
 ensureRemoteEvent("PlayerMessageEvent")
+ensureRemoteEvent("ActionPreviewEvent")
 
 local Services = script.Parent.Services
 local PlayerDataService = require(Services.PlayerDataService)
