@@ -20,6 +20,8 @@ local RESOURCE_ADDERS = {
 	Wood = CurrencyService.AddWood,
 	Stone = CurrencyService.AddStone,
 	Metal = CurrencyService.AddMetal,
+	MetalIngot = CurrencyService.AddMetalIngot,
+	MetalParts = CurrencyService.AddMetalParts,
 }
 
 local RESOURCE_NAMES = {
@@ -27,6 +29,8 @@ local RESOURCE_NAMES = {
 	Wood = true,
 	Stone = true,
 	Metal = true,
+	MetalIngot = true,
+	MetalParts = true,
 }
 
 local RESOURCE_ALIASES = {
@@ -34,6 +38,17 @@ local RESOURCE_ALIASES = {
 	wood = "Wood",
 	stone = "Stone",
 	metal = "Metal",
+	metalingot = "MetalIngot",
+	metalparts = "MetalParts",
+}
+
+local RESOURCE_SET_ALL_NAMES = {
+	"Gold",
+	"Wood",
+	"Stone",
+	"Metal",
+	"MetalIngot",
+	"MetalParts",
 }
 
 local function getRemoteEvent(eventName)
@@ -113,14 +128,18 @@ end
 
 local function printStatus(player, profile)
 	print(string.format(
-		"[AdminService] %s status: Gold=%d Wood=%d Stone=%d Metal=%d HouseLevel=%d ToolKitLevel=%d ForestUnlocked=%s RockZoneUnlocked=%s",
+		"[AdminService] %s status: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d HouseLevel=%d StorageLevel=%d ToolKitLevel=%d ForgeLevel=%d ForestUnlocked=%s RockZoneUnlocked=%s",
 		player.Name,
 		profile.Gold or 0,
 		profile.Wood or 0,
 		profile.Stone or 0,
 		profile.Metal or 0,
+		profile.MetalIngot or 0,
+		profile.MetalParts or 0,
 		profile.HouseLevel or 1,
+		profile.StorageLevel or 0,
 		profile.ToolKitLevel or 0,
+		profile.ForgeLevel or 0,
 		tostring(profile.ForestUnlocked == true),
 		tostring(profile.RockZoneUnlocked == true)
 	))
@@ -131,7 +150,7 @@ local function handleAddCommand(player, args)
 	local amount = parseNonNegativeInteger(args[4])
 
 	if not resourceName or not amount then
-		warn("[AdminService] Usage: /gl add Gold|Wood|Stone|Metal amount")
+		warn("[AdminService] Usage: /gl add Gold|Wood|Stone|Metal|MetalIngot|MetalParts amount")
 		return
 	end
 
@@ -157,15 +176,14 @@ local function handleSetCommand(player, profile, args)
 	local amount = parseNonNegativeInteger(args[4])
 
 	if not resourceText or not amount then
-		warn("[AdminService] Usage: /gl set Gold|Wood|Stone|Metal|all amount")
+		warn("[AdminService] Usage: /gl set Gold|Wood|Stone|Metal|MetalIngot|MetalParts|all amount")
 		return
 	end
 
 	if string.lower(resourceText) == "all" then
-		setResource(profile, "Gold", amount)
-		setResource(profile, "Wood", amount)
-		setResource(profile, "Stone", amount)
-		setResource(profile, "Metal", amount)
+		for _, resourceName in ipairs(RESOURCE_SET_ALL_NAMES) do
+			setResource(profile, resourceName, amount)
+		end
 	else
 		local resourceName = normalizeResourceName(resourceText)
 
@@ -180,7 +198,16 @@ local function handleSetCommand(player, profile, args)
 	PlayerDataService.MarkDirty(player)
 	updateAndSaveProfile(player)
 	sendPlayerMessage(player, string.format("Admin: resources set to %d", amount))
-	print(string.format("[AdminService] Set resources for %s. Gold=%d Wood=%d Stone=%d Metal=%d.", player.Name, profile.Gold, profile.Wood, profile.Stone, profile.Metal))
+	print(string.format(
+		"[AdminService] Set resources for %s. Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d.",
+		player.Name,
+		profile.Gold,
+		profile.Wood,
+		profile.Stone,
+		profile.Metal,
+		profile.MetalIngot or 0,
+		profile.MetalParts or 0
+	))
 end
 
 local function handleToolsCommand(player, profile, args)
@@ -213,6 +240,44 @@ local function handleHouseCommand(player, profile, args)
 	updateAndSaveProfile(player)
 	sendPlayerMessage(player, string.format("Admin: house level %d", level))
 	print(string.format("[AdminService] Set HouseLevel=%d for %s.", level, player.Name))
+end
+
+local function handleStorageCommand(player, profile, args)
+	local level = parseNonNegativeInteger(args[3])
+
+	if not level or level > 2 then
+		warn("[AdminService] Usage: /gl storage 0|1|2")
+		return
+	end
+
+	profile.StorageLevel = level
+	profile.StorageBuilt = level >= 1
+	PlayerDataService.MarkDirty(player)
+	refreshPlotVisual(player, profile)
+	updateAndSaveProfile(player)
+	sendPlayerMessage(player, string.format("Admin: storage level %d", level))
+	print(string.format(
+		"[AdminService] Set StorageLevel=%d StorageBuilt=%s for %s.",
+		level,
+		tostring(profile.StorageBuilt == true),
+		player.Name
+	))
+end
+
+local function handleForgeCommand(player, profile, args)
+	local level = parseNonNegativeInteger(args[3])
+
+	if not level or level > 1 then
+		warn("[AdminService] Usage: /gl forge 0|1")
+		return
+	end
+
+	profile.ForgeLevel = level
+	PlayerDataService.MarkDirty(player)
+	refreshPlotVisual(player, profile)
+	updateAndSaveProfile(player)
+	sendPlayerMessage(player, string.format("Admin: forge level %d", level))
+	print(string.format("[AdminService] Set ForgeLevel=%d for %s.", level, player.Name))
 end
 
 local function splitCommand(message)
@@ -256,8 +321,12 @@ local function handleCommand(player, message)
 		handleToolsCommand(player, profile, args)
 	elseif command == "house" then
 		handleHouseCommand(player, profile, args)
+	elseif command == "storage" then
+		handleStorageCommand(player, profile, args)
+	elseif command == "forge" then
+		handleForgeCommand(player, profile, args)
 	else
-		warn("[AdminService] Unknown command. Use /gl status, add, set, tools, or house.")
+		warn("[AdminService] Unknown command. Use /gl status, add, set, tools, house, storage, or forge.")
 	end
 end
 
