@@ -1,25 +1,41 @@
-# MVP 0.4.x — Add pending save flush for rapid profile changes
+# MVP 0.4.x — Add quest step for building Storage
 
 Continue the GoldenLand Roblox/Rojo project.
 
-## Problem
-
-Fast repeated player actions can change the profile several times in a short period.
-
-Current behavior seen in logs:
-- first action starts saving;
-- following actions may print `Skipped duplicate save`;
-- profile values are updated in memory and UI, but the latest values must be guaranteed to be saved later.
-
-This is especially important for forge actions:
-- smelting MetalIngot several times quickly;
-- making MetalParts several times quickly.
-
 ## Goal
 
-Improve `PlayerDataService` save behavior so rapid profile changes are not lost.
+Add a simple guided quest step that teaches the player to build Storage after they already have a house.
 
-If `SaveProfile(player)` is called while a save for that player is already in progress, the service should not start another immediate DataStore write. Instead, it should mark that player as needing another save after the current save finishes.
+This is the beginning of the camp development quest chain.
+
+## Current context
+
+The project already has:
+- player profile save/load;
+- resources: Gold, Wood, Stone, Metal;
+- processed resources: MetalIngot, MetalParts;
+- HouseLevel;
+- StorageLevel;
+- ToolKitLevel;
+- ForgeLevel;
+- workshop/forge systems;
+- admin commands;
+- temporary profile save protection;
+- pending save flush for rapid profile changes.
+
+## Design direction
+
+The early game should guide the player through camp development:
+
+1. basic resources;
+2. house;
+3. storage;
+4. tools;
+5. forest unlock;
+6. rock zone;
+7. forge.
+
+This task only adds the Storage quest step. Do not implement the full chain yet.
 
 ## Before changes
 
