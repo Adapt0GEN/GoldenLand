@@ -1,21 +1,25 @@
-# MVP 0.4.x — Protect saves from temporary profile overwrite
+# MVP 0.4.x — Add pending save flush for rapid profile changes
 
 Continue the GoldenLand Roblox/Rojo project.
 
 ## Problem
 
-Sometimes Roblox Studio/DataStore fails to load saved player data because of network/DataStore errors.
+Fast repeated player actions can change the profile several times in a short period.
 
-Current behavior:
-- `PlayerDataService` creates a temporary default profile when `GetAsync` fails.
-- The player can continue playing with default values.
-- This is dangerous because a temporary default profile may later be saved over the real saved profile.
+Current behavior seen in logs:
+- first action starts saving;
+- following actions may print `Skipped duplicate save`;
+- profile values are updated in memory and UI, but the latest values must be guaranteed to be saved later.
+
+This is especially important for forge actions:
+- smelting MetalIngot several times quickly;
+- making MetalParts several times quickly.
 
 ## Goal
 
-Make temporary profiles read-only and impossible to save.
+Improve `PlayerDataService` save behavior so rapid profile changes are not lost.
 
-If saved data fails to load, the game may create a temporary fallback profile for UI/world initialization, but it must never overwrite the real DataStore profile.
+If `SaveProfile(player)` is called while a save for that player is already in progress, the service should not start another immediate DataStore write. Instead, it should mark that player as needing another save after the current save finishes.
 
 ## Before changes
 
