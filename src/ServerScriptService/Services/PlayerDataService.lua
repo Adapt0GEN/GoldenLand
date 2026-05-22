@@ -521,6 +521,11 @@ function PlayerDataService.MarkDirty(player)
 		return false
 	end
 
+	if profile._SaveDisabled then
+		warn(string.format("[PlayerDataService] MarkDirty skipped for %s: profile is temporary and read-only", player.Name))
+		return false
+	end
+
 	profile._Dirty = true
 	profile._DirtyRevision = (profile._DirtyRevision or 0) + 1
 	return true
