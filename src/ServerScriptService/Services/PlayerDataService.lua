@@ -607,8 +607,9 @@ local function saveProfileData(userId, playerName, profile, playerForUpdate, opt
 
 	if saveState.InProgress then
 		if not force then
-			print(string.format("[PlayerDataService] Skipped duplicate save for %s", playerName))
-			return false
+			saveState.PendingSave = true
+			print(string.format("[PlayerDataService] Save already in progress for %s; queued pending save.", playerName))
+			return true
 		end
 
 		while saveState.InProgress do
@@ -627,8 +628,24 @@ local function saveProfileData(userId, playerName, profile, playerForUpdate, opt
 	local now = os.clock()
 
 	if not force and saveState.LastSaveAt and now - saveState.LastSaveAt < SAVE_THROTTLE_SECONDS then
-		print(string.format("[PlayerDataService] Skipped duplicate save for %s", playerName))
-		return false
+		local delaySeconds = SAVE_THROTTLE_SECONDS - (now - saveState.LastSaveAt)
+		saveState.PendingSave = true
+		print(string.format("[PlayerDataService] Save throttled for %s; queued pending save.", playerName))
+
+		if saveState.PendingSaveScheduled ~= true then
+			saveState.PendingSaveScheduled = true
+
+			task.delay(delaySeconds, function()
+				saveState.PendingSaveScheduled = false
+
+				if profiles[userId] == profile and profile._SaveDisabled ~= true and profile._Dirty == true then
+					saveState.PendingSave = false
+					saveProfileData(userId, playerName, profile, playerForUpdate, { Force = true })
+				end
+			end)
+		end
+
+		return true
 	end
 
 	if not force and profile._Dirty ~= true then
@@ -660,6 +677,8 @@ local function saveProfileData(userId, playerName, profile, playerForUpdate, opt
 	end
 
 	saveState.LastSaveAt = os.clock()
+	local needsPendingSave = saveState.PendingSave == true
+	saveState.PendingSave = false
 
 	if (profile._DirtyRevision or 0) == savedDirtyRevision then
 		profile._Dirty = false
@@ -669,6 +688,16 @@ local function saveProfileData(userId, playerName, profile, playerForUpdate, opt
 
 	if playerForUpdate and playerForUpdate.Parent then
 		PlayerDataService.SendProfileUpdate(playerForUpdate)
+	end
+
+	if needsPendingSave or profile._Dirty == true then
+		print(string.format("[PlayerDataService] Flushing pending save for %s.", playerName))
+
+		task.defer(function()
+			if profiles[userId] == profile and profile._SaveDisabled ~= true and profile._Dirty == true then
+				saveProfileData(userId, playerName, profile, playerForUpdate, { Force = true })
+			end
+		end)
 	end
 
 	return true
