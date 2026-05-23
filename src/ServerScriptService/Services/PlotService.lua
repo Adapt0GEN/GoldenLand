@@ -10,6 +10,8 @@ local QuestService = require(script.Parent.QuestService)
 local PlotService = {}
 
 local PLAYER_PLOTS_CONTAINER_NAME = "PlayerPlots"
+local USE_MVP_NEAR_START_PLOT = true
+local MVP_PLOT_POSITION = Vector3.new(80, 0, 0)
 local GRID_START_POSITION = Vector3.new(-200, 0, -200)
 local PLOT_SPACING = 1500
 local PLOT_SIZE = Vector3.new(40, 1, 40)
@@ -130,6 +132,19 @@ local function getPlotGridPosition(player)
 	local index = math.abs(userId) % 10000
 	local gridX = index % 100
 	local gridZ = math.floor(index / 100)
+
+	if USE_MVP_NEAR_START_PLOT then
+		print(string.format(
+			"[PlotService] Assigned MVP near-start plot for %s: gridX=%d, gridZ=%d, position=%s",
+			player.Name,
+			gridX,
+			gridZ,
+			tostring(MVP_PLOT_POSITION)
+		))
+
+		return MVP_PLOT_POSITION, gridX, gridZ
+	end
+
 	local position = GRID_START_POSITION + Vector3.new(
 		gridX * PLOT_SPACING,
 		0,
