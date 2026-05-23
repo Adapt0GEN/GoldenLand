@@ -57,8 +57,21 @@ local FORGE_LEVEL_2_COST = {
 	MetalParts = 3,
 }
 
-local FORGE_SMELT_COST = {
-	Metal = 5,
+local FORGE_SMELT_RECIPES = {
+	[1] = {
+		Cost = {
+			Metal = 5,
+		},
+		MetalIngotReward = 1,
+		Description = "Металл 5 -> слиток 1",
+	},
+	[2] = {
+		Cost = {
+			Metal = 8,
+		},
+		MetalIngotReward = 2,
+		Description = "Металл 8 -> слитки 2",
+	},
 }
 
 local FORGE_PARTS_COST = {
@@ -276,6 +289,10 @@ local function buildActionPreview(player, title, description, cost)
 	}
 end
 
+local function getForgeSmeltRecipe(forgeLevel)
+	return FORGE_SMELT_RECIPES[forgeLevel]
+end
+
 local function buildHouseUpgradePreview(player)
 	local profile = PlayerDataService.GetProfile(player)
 
@@ -359,17 +376,25 @@ end
 
 local function buildForgeSmeltPreview(player)
 	local profile = PlayerDataService.GetProfile(player)
+	local forgeLevel = if profile then PlayerDataService.GetBuildingLevel(profile, "Forge") else 0
+	local recipe = getForgeSmeltRecipe(forgeLevel)
 
-	if not profile or PlayerDataService.GetBuildingLevel(profile, "Forge") < 1 then
+	if not profile or not recipe then
 		return nil
 	end
 
-	return buildActionPreview(
+	local previewData = buildActionPreview(
 		player,
 		"Плавка в кузнице",
 		"Металл 5 -> слиток 1",
-		FORGE_SMELT_COST
+		recipe.Cost
 	)
+
+	if previewData then
+		previewData.description = recipe.Description
+	end
+
+	return previewData
 end
 
 local function buildForgePartsPreview(player)
@@ -2178,21 +2203,24 @@ function PlotService.CanSmeltMetalIngot(player)
 		return false, "profile not found"
 	end
 
-	if PlayerDataService.GetBuildingLevel(profile, "Forge") < 1 then
+	local forgeLevel = PlayerDataService.GetBuildingLevel(profile, "Forge")
+	local recipe = getForgeSmeltRecipe(forgeLevel)
+
+	if not recipe then
 		return false, "forge not built"
 	end
 
-	if not CurrencyService.CanAfford(player, FORGE_SMELT_COST) then
-		return false, "not enough resources", FORGE_SMELT_COST, CurrencyService.FormatMissingResources(player, FORGE_SMELT_COST)
+	if not CurrencyService.CanAfford(player, recipe.Cost) then
+		return false, "not enough resources", recipe.Cost, CurrencyService.FormatMissingResources(player, recipe.Cost)
 	end
 
-	return true, "can smelt", FORGE_SMELT_COST
+	return true, "can smelt", recipe.Cost, nil, recipe.MetalIngotReward
 end
 
 function PlotService.TrySmeltMetalIngot(player)
 	print(string.format("[Forge] %s tried to smelt MetalIngot", player.Name))
 
-	local canSmelt, reason, cost, missingResourcesMessage = PlotService.CanSmeltMetalIngot(player)
+	local canSmelt, reason, cost, missingResourcesMessage, metalIngotReward = PlotService.CanSmeltMetalIngot(player)
 
 	if not canSmelt then
 		if reason == "forge not built" then
@@ -2223,7 +2251,7 @@ function PlotService.TrySmeltMetalIngot(player)
 		return false
 	end
 
-	CurrencyService.AddMetalIngot(player, 1)
+	CurrencyService.AddMetalIngot(player, metalIngotReward)
 
 	if PlayerDataService.SaveProfile then
 		PlayerDataService.SaveProfile(player)
@@ -2231,7 +2259,7 @@ function PlotService.TrySmeltMetalIngot(player)
 
 	sendPlayerMessage(player, "Слиток выплавлен")
 	hideActionPreview(player)
-	print(string.format("[Forge] %s smelted MetalIngot", player.Name))
+	print(string.format("[Forge] %s smelted %d MetalIngot", player.Name, metalIngotReward))
 
 	return true
 end
