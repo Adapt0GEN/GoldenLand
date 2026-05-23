@@ -111,6 +111,7 @@ local previewPromptNames = {
 	HouseUpgradePrompt = true,
 	CraftToolKitPrompt = true,
 	BuildForgePrompt = true,
+	UpgradeForgePrompt = true,
 	SmeltMetalIngotPrompt = true,
 	MakeMetalPartsPrompt = true,
 	StorageUpgradePrompt = true,

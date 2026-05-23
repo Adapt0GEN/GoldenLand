@@ -17,6 +17,7 @@ local PLOT_SPACING = 1500
 local PLOT_SIZE = Vector3.new(40, 1, 40)
 local MAX_HOUSE_LEVEL = 3
 local MAX_STORAGE_LEVEL = 2
+local MAX_FORGE_LEVEL = 2
 local STORAGE_QUEST_ID = "build_storage"
 local STORAGE_OBJECTIVE_ID = "storage_built"
 local STORAGE_BUILD_COST = {
@@ -45,6 +46,15 @@ local FORGE_BUILD_COST = {
 	Wood = 20,
 	Stone = 30,
 	Metal = 15,
+}
+
+local FORGE_LEVEL_2_COST = {
+	Gold = 25,
+	Wood = 20,
+	Stone = 20,
+	Metal = 15,
+	MetalIngot = 5,
+	MetalParts = 3,
 }
 
 local FORGE_SMELT_COST = {
@@ -331,6 +341,22 @@ local function buildForgePreview(player)
 	)
 end
 
+local function buildForgeUpgradePreview(player)
+	local profile = PlayerDataService.GetProfile(player)
+	local forgeLevel = if profile then PlayerDataService.GetBuildingLevel(profile, "Forge") else 0
+
+	if not profile or forgeLevel ~= 1 then
+		return nil
+	end
+
+	return buildActionPreview(
+		player,
+		"Forge upgrade",
+		string.format("Forge: level %d -> %d", forgeLevel, forgeLevel + 1),
+		FORGE_LEVEL_2_COST
+	)
+end
+
 local function buildForgeSmeltPreview(player)
 	local profile = PlayerDataService.GetProfile(player)
 
@@ -568,6 +594,45 @@ local function addForgePartsPrompt(forge)
 	end)
 
 	return prompt
+end
+
+local function addForgeUpgradePrompt(forge)
+	local promptPart = forge:FindFirstChild("ForgeBase")
+
+	if not promptPart then
+		warn("[Forge] ForgeBase was not found. Upgrade prompt was not created.")
+		return nil
+	end
+
+	local existingPrompt = promptPart:FindFirstChild("UpgradeForgePrompt")
+
+	if existingPrompt then
+		return existingPrompt
+	end
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "UpgradeForgePrompt"
+	prompt.ObjectText = "Forge"
+	prompt.ActionText = "Upgrade forge"
+	prompt.HoldDuration = 0.7
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt.Enabled = true
+	prompt.Parent = promptPart
+
+	prompt.Triggered:Connect(function(player)
+		PlotService.TryUpgradeForge(player)
+	end)
+
+	return prompt
+end
+
+local function removeForgeUpgradePrompt(forge)
+	local upgradePrompt = forge:FindFirstChild("UpgradeForgePrompt", true)
+
+	if upgradePrompt then
+		upgradePrompt:Destroy()
+	end
 end
 
 local function removeToolKitCraftPrompt(workshop)
@@ -1350,26 +1415,79 @@ local function createForgeBuildSite(player, plotModel, plotBase)
 	return buildSite
 end
 
+local function updateForgeLevelVisual(player, forge, plotBase, forgeLevel)
+	local signLabel = forge:FindFirstChild("ForgeSignLabel", true)
+
+	if signLabel then
+		signLabel.Text = string.format("Forge Lv.%d", forgeLevel)
+	end
+
+	local forgeCenterCFrame = forgePlotCFrame(plotBase, Vector3.new(0, 0.75, 0))
+	local existingLevelMarker = forge:FindFirstChild("ForgeLevelTwoMarker")
+	local existingReinforcedChimney = forge:FindFirstChild("ForgeReinforcedChimney")
+
+	if forgeLevel < 2 then
+		if existingLevelMarker then
+			existingLevelMarker:Destroy()
+		end
+
+		if existingReinforcedChimney then
+			existingReinforcedChimney:Destroy()
+		end
+
+		addForgeUpgradePrompt(forge)
+		return
+	end
+
+	if not existingLevelMarker then
+		local marker = createPart(
+			"ForgeLevelTwoMarker",
+			Vector3.new(3, 0.35, 3),
+			forgeCenterCFrame * CFrame.new(3.2, 0.2, -1.8),
+			Color3.fromRGB(245, 210, 95),
+			forge
+		)
+		marker.Material = Enum.Material.Metal
+	end
+
+	if not existingReinforcedChimney then
+		local reinforcedChimney = createPart(
+			"ForgeReinforcedChimney",
+			Vector3.new(2.8, 1.4, 2.8),
+			forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + 5 + 6 + (1.4 / 2), 0),
+			Color3.fromRGB(80, 80, 85),
+			forge
+		)
+		reinforcedChimney.Material = Enum.Material.Metal
+	end
+
+	removeForgeUpgradePrompt(forge)
+	print(string.format("[Forge] Updated forge visual for %s to level %d.", player.Name, forgeLevel))
+end
+
 local function createForge(player, plotModel, plotBase)
 	removeForgeBuildSite(plotModel)
-
-	local existingForge = plotModel:FindFirstChild("Forge")
-
-	if existingForge and existingForge:FindFirstChild("ForgeBase") then
-		addForgeSmeltPrompt(existingForge)
-		addForgePartsPrompt(existingForge)
-		return existingForge
-	end
-
-	if existingForge then
-		existingForge:Destroy()
-	end
+	local profile = PlayerDataService.GetProfile(player)
+	local forgeLevel = if profile then PlayerDataService.GetBuildingLevel(profile, "Forge") else 0
 
 	plotBase = plotBase or getPlotBase(plotModel)
 
 	if not plotBase then
 		print("[PlotService] Error: Plot base not found for forge generation!")
 		return nil
+	end
+
+	local existingForge = plotModel:FindFirstChild("Forge")
+
+	if existingForge and existingForge:FindFirstChild("ForgeBase") then
+		addForgeSmeltPrompt(existingForge)
+		addForgePartsPrompt(existingForge)
+		updateForgeLevelVisual(player, existingForge, plotBase, forgeLevel)
+		return existingForge
+	end
+
+	if existingForge then
+		existingForge:Destroy()
 	end
 
 	local forge = Instance.new("Model")
@@ -1425,6 +1543,7 @@ local function createForge(player, plotModel, plotBase)
 
 	addForgeSmeltPrompt(forge)
 	addForgePartsPrompt(forge)
+	updateForgeLevelVisual(player, forge, plotBase, forgeLevel)
 	return forge
 end
 
@@ -1966,6 +2085,92 @@ function PlotService.TryBuildForge(player)
 	return true
 end
 
+function PlotService.CanUpgradeForge(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return false, "profile not found"
+	end
+
+	local forgeLevel = PlayerDataService.GetBuildingLevel(profile, "Forge")
+
+	if forgeLevel < 1 then
+		return false, "forge not built"
+	end
+
+	if forgeLevel >= MAX_FORGE_LEVEL then
+		return false, "forge already upgraded"
+	end
+
+	if not CurrencyService.CanAfford(player, FORGE_LEVEL_2_COST) then
+		return false, "not enough resources", FORGE_LEVEL_2_COST, CurrencyService.FormatMissingResources(player, FORGE_LEVEL_2_COST)
+	end
+
+	return true, "can upgrade", FORGE_LEVEL_2_COST, nil, forgeLevel + 1
+end
+
+function PlotService.TryUpgradeForge(player)
+	print(string.format("[Forge] %s tried to upgrade forge", player.Name))
+
+	local canUpgrade, reason, cost, missingResourcesMessage, nextForgeLevel = PlotService.CanUpgradeForge(player)
+
+	if not canUpgrade then
+		if reason == "forge not built" then
+			warn(string.format("[Forge] %s cannot upgrade forge: forge is not built", player.Name))
+			sendPlayerMessage(player, "Forge is not built")
+		elseif reason == "forge already upgraded" then
+			print(string.format("[Forge] %s tried to upgrade forge, but forge is already upgraded", player.Name))
+			sendPlayerMessage(player, "Forge is already upgraded")
+		elseif reason == "not enough resources" then
+			warn(string.format("[Forge] %s cannot upgrade forge: not enough resources", player.Name))
+			sendPlayerMessage(player, string.format(
+				"Not enough resources to upgrade the forge. %s. %s",
+				formatCost(cost),
+				missingResourcesMessage or CurrencyService.FormatMissingResources(player, cost)
+			))
+		else
+			warn(string.format("[Forge] %s cannot upgrade forge: %s", player.Name, reason))
+			sendPlayerMessage(player, "Forge cannot be upgraded")
+		end
+
+		return false
+	end
+
+	local resourcesSpent, spendMissingResourcesMessage = CurrencyService.SpendResources(player, cost)
+
+	if not resourcesSpent then
+		sendPlayerMessage(player, string.format(
+			"Not enough resources to upgrade the forge. %s",
+			spendMissingResourcesMessage or CurrencyService.FormatMissingResources(player, cost)
+		))
+		return false
+	end
+
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return false
+	end
+
+	PlayerDataService.SetBuildingLevel(profile, "Forge", nextForgeLevel)
+	PlayerDataService.MarkDirty(player)
+	updateForgeVisual(player, profile)
+
+	if PlayerDataService.SendProfileUpdate then
+		PlayerDataService.SendProfileUpdate(player)
+	end
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player, { Force = true })
+	end
+
+	sendPlayerMessage(player, string.format("Forge upgraded to level %d", nextForgeLevel))
+	hideActionPreview(player)
+	print(string.format("[Forge] %s upgraded forge to level %d", player.Name, nextForgeLevel))
+
+	return true
+end
+
 function PlotService.CanSmeltMetalIngot(player)
 	local profile = PlayerDataService.GetProfile(player)
 
@@ -2426,6 +2631,8 @@ local function handleActionPreviewRequest(player, request)
 		previewData = buildToolKitPreview(player)
 	elseif request.promptName == "BuildForgePrompt" then
 		previewData = buildForgePreview(player)
+	elseif request.promptName == "UpgradeForgePrompt" then
+		previewData = buildForgeUpgradePreview(player)
 	elseif request.promptName == "SmeltMetalIngotPrompt" then
 		previewData = buildForgeSmeltPreview(player)
 	elseif request.promptName == "MakeMetalPartsPrompt" then
