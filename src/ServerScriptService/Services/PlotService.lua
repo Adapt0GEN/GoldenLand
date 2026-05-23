@@ -9,7 +9,9 @@ local QuestService = require(script.Parent.QuestService)
 
 local PlotService = {}
 
-local PLOT_POSITION = Vector3.new(0, 0, 80)
+local PLAYER_PLOTS_CONTAINER_NAME = "PlayerPlots"
+local GRID_START_POSITION = Vector3.new(-200, 0, -200)
+local PLOT_SPACING = 1500
 local PLOT_SIZE = Vector3.new(40, 1, 40)
 local MAX_HOUSE_LEVEL = 3
 local MAX_STORAGE_LEVEL = 2
@@ -110,8 +112,65 @@ local function getPlotName(player)
 	return string.format("Plot_%d", player.UserId)
 end
 
+local function getPlayerPlotsContainer(createIfMissing)
+	local playerPlots = Workspace:FindFirstChild(PLAYER_PLOTS_CONTAINER_NAME)
+
+	if not playerPlots and createIfMissing then
+		playerPlots = Instance.new("Folder")
+		playerPlots.Name = PLAYER_PLOTS_CONTAINER_NAME
+		playerPlots.Parent = Workspace
+		print("[PlotService] Created PlayerPlots container.")
+	end
+
+	return playerPlots
+end
+
+local function getPlotGridPosition(player)
+	local userId = player.UserId
+	local index = math.abs(userId) % 10000
+	local gridX = index % 100
+	local gridZ = math.floor(index / 100)
+	local position = GRID_START_POSITION + Vector3.new(
+		gridX * PLOT_SPACING,
+		0,
+		gridZ * PLOT_SPACING
+	)
+
+	print(string.format(
+		"[PlotService] Assigned plot grid for %s: gridX=%d, gridZ=%d, position=%s",
+		player.Name,
+		gridX,
+		gridZ,
+		tostring(position)
+	))
+
+	return position, gridX, gridZ
+end
+
 local function getPlot(player)
-	return Workspace:FindFirstChild(getPlotName(player))
+	local plotName = getPlotName(player)
+	local playerPlots = getPlayerPlotsContainer(false)
+	local plotModel = if playerPlots then playerPlots:FindFirstChild(plotName) else nil
+
+	return plotModel or Workspace:FindFirstChild(plotName)
+end
+
+local function setPlotOwnershipAttributes(plotModel, player, gridX, gridZ)
+	plotModel:SetAttribute("OwnerUserId", player.UserId)
+	plotModel:SetAttribute("OwnerName", player.Name)
+	plotModel:SetAttribute("GridX", gridX)
+	plotModel:SetAttribute("GridZ", gridZ)
+end
+
+local function setPlotBaseAttributes(plotBase, player, gridX, gridZ)
+	if not plotBase then
+		return
+	end
+
+	plotBase:SetAttribute("OwnerUserId", player.UserId)
+	plotBase:SetAttribute("OwnerName", player.Name)
+	plotBase:SetAttribute("GridX", gridX)
+	plotBase:SetAttribute("GridZ", gridZ)
 end
 
 local function getPlotBase(plotModel)
@@ -638,6 +697,28 @@ local function createPlotAreaSign(plotModel, plotBase)
 	label.Parent = surfaceGui
 
 	return sign
+end
+
+local function rebuildPlotSigns(player, plotModel, plotBase)
+	local signPartNames = {
+		"SignLeftPost",
+		"SignRightPost",
+		"PlayerNameSign",
+		"LandSignLeftPost",
+		"LandSignRightPost",
+		"PersonalLandSign",
+	}
+
+	for _, signPartName in ipairs(signPartNames) do
+		local signPart = plotModel:FindFirstChild(signPartName)
+
+		if signPart then
+			signPart:Destroy()
+		end
+	end
+
+	createPlayerSign(player, plotModel, plotBase)
+	createPlotAreaSign(plotModel, plotBase)
 end
 
 local function createLevelOneHouse(house, plotBase)
@@ -1538,33 +1619,48 @@ function PlotService.CreateTestPlot(player)
 		return nil
 	end
 
+	local plotPosition, gridX, gridZ = getPlotGridPosition(player)
+	local playerPlots = getPlayerPlotsContainer(true)
 	local existingPlot = getPlot(player)
 
 	if existingPlot then
-		print(string.format("[PlotService] Test plot for %s already exists.", player.Name))
+		print(string.format("[PlotService] Reusing existing plot for %s.", player.Name))
+		existingPlot.Parent = playerPlots
+		setPlotOwnershipAttributes(existingPlot, player, gridX, gridZ)
+
+		local existingBase = getPlotBase(existingPlot)
+
+		if existingBase then
+			existingBase.CFrame = CFrame.new(plotPosition)
+			setPlotBaseAttributes(existingBase, player, gridX, gridZ)
+			rebuildPlotSigns(player, existingPlot, existingBase)
+		end
+
 		restorePlotBuildingVisuals(player, existingPlot, profile)
 		return existingPlot
 	end
 
 	local plotModel = Instance.new("Model")
 	plotModel.Name = getPlotName(player)
-	plotModel.Parent = Workspace
+	setPlotOwnershipAttributes(plotModel, player, gridX, gridZ)
+	plotModel.Parent = playerPlots
 
 	local base = createPart(
 		"PlotBase",
 		PLOT_SIZE,
-		CFrame.new(PLOT_POSITION),
+		CFrame.new(plotPosition),
 		Color3.fromRGB(80, 155, 85),
 		plotModel
 	)
 	base.Material = Enum.Material.Grass
+	setPlotBaseAttributes(base, player, gridX, gridZ)
 	plotModel.PrimaryPart = base
 
 	createPlayerSign(player, plotModel, base)
 	createPlotAreaSign(plotModel, base)
 	restorePlotBuildingVisuals(player, plotModel, profile)
 
-	print(string.format("[PlotService] Created test plot for %s.", player.Name))
+	print(string.format("[PlotService] Created plot for %s at %s.", player.Name, tostring(plotPosition)))
 	return plotModel
 end
 
