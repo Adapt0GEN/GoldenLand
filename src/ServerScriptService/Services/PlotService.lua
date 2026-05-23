@@ -15,10 +15,6 @@ local MAX_HOUSE_LEVEL = 3
 local MAX_STORAGE_LEVEL = 2
 local STORAGE_QUEST_ID = "build_storage"
 local STORAGE_OBJECTIVE_ID = "storage_built"
-local STORAGE_POSITION = PLOT_POSITION + Vector3.new(-12, 0, 14)
-local WORKSHOP_POSITION = PLOT_POSITION + Vector3.new(13, 0.8, 11)
-local FORGE_POSITION = PLOT_POSITION + Vector3.new(13, 0.8, -11)
-
 local STORAGE_BUILD_COST = {
 	Gold = 15,
 	Wood = 10,
@@ -118,11 +114,21 @@ local function getPlot(player)
 	return Workspace:FindFirstChild(getPlotName(player))
 end
 
-local function createPart(name, size, position, color, parent)
+local function getPlotBase(plotModel)
+	return plotModel:FindFirstChild("PlotBase")
+		or plotModel:FindFirstChild("Plot")
+		or plotModel.PrimaryPart
+end
+
+local function plotOffsetCFrame(plotBase, offset)
+	return plotBase.CFrame * CFrame.new(offset.X, offset.Y, offset.Z)
+end
+
+local function createPart(name, size, cframe, color, parent)
 	local part = Instance.new("Part")
 	part.Name = name
 	part.Size = size
-	part.Position = position
+	part.CFrame = cframe
 	part.Anchored = true
 	part.Color = color
 	part.TopSurface = Enum.SurfaceType.Smooth
@@ -193,7 +199,7 @@ local function buildHouseUpgradePreview(player)
 		return nil
 	end
 
-	local currentLevel = profile.HouseLevel or 1
+	local currentLevel = PlayerDataService.GetBuildingLevel(profile, "House")
 	local cost = getUpgradeCost(currentLevel)
 
 	if currentLevel >= MAX_HOUSE_LEVEL or not cost then
@@ -239,7 +245,7 @@ end
 local function buildForgePreview(player)
 	local profile = PlayerDataService.GetProfile(player)
 
-	if not profile or (profile.ForgeLevel or 0) >= 1 then
+	if not profile or PlayerDataService.GetBuildingLevel(profile, "Forge") >= 1 then
 		return nil
 	end
 
@@ -254,7 +260,7 @@ end
 local function buildForgeSmeltPreview(player)
 	local profile = PlayerDataService.GetProfile(player)
 
-	if not profile or (profile.ForgeLevel or 0) < 1 then
+	if not profile or PlayerDataService.GetBuildingLevel(profile, "Forge") < 1 then
 		return nil
 	end
 
@@ -269,7 +275,7 @@ end
 local function buildForgePartsPreview(player)
 	local profile = PlayerDataService.GetProfile(player)
 
-	if not profile or (profile.ForgeLevel or 0) < 1 then
+	if not profile or PlayerDataService.GetBuildingLevel(profile, "Forge") < 1 then
 		return nil
 	end
 
@@ -284,11 +290,11 @@ end
 local function buildStorageUpgradePreview(player)
 	local profile = PlayerDataService.GetProfile(player)
 
-	if not profile or profile.StorageBuilt ~= true then
+	local storageLevel = if profile then PlayerDataService.GetBuildingLevel(profile, "Storage") else 0
+
+	if not profile or storageLevel < 1 then
 		return nil
 	end
-
-	local storageLevel = profile.StorageLevel or 1
 
 	if storageLevel >= MAX_STORAGE_LEVEL then
 		return nil
@@ -542,12 +548,12 @@ local function addToolKitCraftPrompt(player, workshop)
 	return prompt
 end
 
-local function createPlayerSign(player, plotModel)
+local function createPlayerSign(player, plotModel, plotBase)
 	-- Простая табличка с именем игрока у входа на участок.
 	local leftPost = createPart(
 		"SignLeftPost",
 		Vector3.new(0.4, 3, 0.4),
-		PLOT_POSITION + Vector3.new(-16, 2, -17),
+		plotOffsetCFrame(plotBase, Vector3.new(-16, 2, -17)),
 		Color3.fromRGB(95, 65, 40),
 		plotModel
 	)
@@ -555,7 +561,7 @@ local function createPlayerSign(player, plotModel)
 	local rightPost = createPart(
 		"SignRightPost",
 		Vector3.new(0.4, 3, 0.4),
-		PLOT_POSITION + Vector3.new(-10, 2, -17),
+		plotOffsetCFrame(plotBase, Vector3.new(-10, 2, -17)),
 		Color3.fromRGB(95, 65, 40),
 		plotModel
 	)
@@ -563,7 +569,7 @@ local function createPlayerSign(player, plotModel)
 	local sign = createPart(
 		"PlayerNameSign",
 		Vector3.new(8, 2, 0.4),
-		PLOT_POSITION + Vector3.new(-13, 4, -17),
+		plotOffsetCFrame(plotBase, Vector3.new(-13, 4, -17)),
 		Color3.fromRGB(235, 205, 120),
 		plotModel
 	)
@@ -588,12 +594,12 @@ local function createPlayerSign(player, plotModel)
 	return leftPost, rightPost, sign
 end
 
-local function createPlotAreaSign(plotModel)
+local function createPlotAreaSign(plotModel, plotBase)
 	-- Общая табличка, чтобы участок читался как личная земля игрока.
 	createPart(
 		"LandSignLeftPost",
 		Vector3.new(0.4, 3, 0.4),
-		PLOT_POSITION + Vector3.new(9, 2, -17),
+		plotOffsetCFrame(plotBase, Vector3.new(9, 2, -17)),
 		Color3.fromRGB(95, 65, 40),
 		plotModel
 	)
@@ -601,7 +607,7 @@ local function createPlotAreaSign(plotModel)
 	createPart(
 		"LandSignRightPost",
 		Vector3.new(0.4, 3, 0.4),
-		PLOT_POSITION + Vector3.new(17, 2, -17),
+		plotOffsetCFrame(plotBase, Vector3.new(17, 2, -17)),
 		Color3.fromRGB(95, 65, 40),
 		plotModel
 	)
@@ -609,7 +615,7 @@ local function createPlotAreaSign(plotModel)
 	local sign = createPart(
 		"PersonalLandSign",
 		Vector3.new(10, 2, 0.4),
-		PLOT_POSITION + Vector3.new(13, 4, -17),
+		plotOffsetCFrame(plotBase, Vector3.new(13, 4, -17)),
 		Color3.fromRGB(235, 205, 120),
 		plotModel
 	)
@@ -634,12 +640,12 @@ local function createPlotAreaSign(plotModel)
 	return sign
 end
 
-local function createLevelOneHouse(house)
+local function createLevelOneHouse(house, plotBase)
 	-- Уровень 1: маленькая хижина.
 	local body = createPart(
 		"HouseBody",
 		Vector3.new(10, 6, 10),
-		PLOT_POSITION + Vector3.new(0, 3.5, 0),
+		plotOffsetCFrame(plotBase, Vector3.new(0, 3.5, 0)),
 		Color3.fromRGB(145, 95, 55),
 		house
 	)
@@ -647,7 +653,7 @@ local function createLevelOneHouse(house)
 	createPart(
 		"HouseRoof",
 		Vector3.new(12, 2, 12),
-		PLOT_POSITION + Vector3.new(0, 7.5, 0),
+		plotOffsetCFrame(plotBase, Vector3.new(0, 7.5, 0)),
 		Color3.fromRGB(105, 55, 45),
 		house
 	)
@@ -655,7 +661,7 @@ local function createLevelOneHouse(house)
 	createPart(
 		"HouseDoor",
 		Vector3.new(2.5, 4, 0.3),
-		PLOT_POSITION + Vector3.new(0, 2.5, -5.15),
+		plotOffsetCFrame(plotBase, Vector3.new(0, 2.5, -5.15)),
 		Color3.fromRGB(70, 45, 30),
 		house
 	)
@@ -663,7 +669,7 @@ local function createLevelOneHouse(house)
 	createPart(
 		"HouseWindow",
 		Vector3.new(2, 2, 0.3),
-		PLOT_POSITION + Vector3.new(3.2, 4, -5.15),
+		plotOffsetCFrame(plotBase, Vector3.new(3.2, 4, -5.15)),
 		Color3.fromRGB(170, 220, 255),
 		house
 	)
@@ -671,12 +677,12 @@ local function createLevelOneHouse(house)
 	addHouseUpgradePrompt(body)
 end
 
-local function createLevelTwoHouse(house)
+local function createLevelTwoHouse(house, plotBase)
 	-- Уровень 2: дом крупнее, светлее и с боковой пристройкой.
 	local body = createPart(
 		"HouseBody",
 		Vector3.new(14, 8, 12),
-		PLOT_POSITION + Vector3.new(0, 4.5, 0),
+		plotOffsetCFrame(plotBase, Vector3.new(0, 4.5, 0)),
 		Color3.fromRGB(190, 135, 75),
 		house
 	)
@@ -684,7 +690,7 @@ local function createLevelTwoHouse(house)
 	createPart(
 		"HouseExtension",
 		Vector3.new(6, 5, 8),
-		PLOT_POSITION + Vector3.new(10, 3, 1),
+		plotOffsetCFrame(plotBase, Vector3.new(10, 3, 1)),
 		Color3.fromRGB(175, 120, 65),
 		house
 	)
@@ -692,7 +698,7 @@ local function createLevelTwoHouse(house)
 	createPart(
 		"HouseRoof",
 		Vector3.new(16, 2, 14),
-		PLOT_POSITION + Vector3.new(0, 9.5, 0),
+		plotOffsetCFrame(plotBase, Vector3.new(0, 9.5, 0)),
 		Color3.fromRGB(135, 45, 45),
 		house
 	)
@@ -700,7 +706,7 @@ local function createLevelTwoHouse(house)
 	createPart(
 		"ExtensionRoof",
 		Vector3.new(7, 1.5, 9),
-		PLOT_POSITION + Vector3.new(10, 6.25, 1),
+		plotOffsetCFrame(plotBase, Vector3.new(10, 6.25, 1)),
 		Color3.fromRGB(135, 45, 45),
 		house
 	)
@@ -708,7 +714,7 @@ local function createLevelTwoHouse(house)
 	createPart(
 		"HouseDoor",
 		Vector3.new(3, 4.5, 0.3),
-		PLOT_POSITION + Vector3.new(-2, 2.75, -6.15),
+		plotOffsetCFrame(plotBase, Vector3.new(-2, 2.75, -6.15)),
 		Color3.fromRGB(80, 45, 25),
 		house
 	)
@@ -716,7 +722,7 @@ local function createLevelTwoHouse(house)
 	createPart(
 		"HouseWindowLeft",
 		Vector3.new(2, 2, 0.3),
-		PLOT_POSITION + Vector3.new(3, 5, -6.15),
+		plotOffsetCFrame(plotBase, Vector3.new(3, 5, -6.15)),
 		Color3.fromRGB(175, 225, 255),
 		house
 	)
@@ -724,7 +730,7 @@ local function createLevelTwoHouse(house)
 	createPart(
 		"HouseWindowRight",
 		Vector3.new(2, 2, 0.3),
-		PLOT_POSITION + Vector3.new(10, 3.5, -3.15),
+		plotOffsetCFrame(plotBase, Vector3.new(10, 3.5, -3.15)),
 		Color3.fromRGB(175, 225, 255),
 		house
 	)
@@ -732,12 +738,12 @@ local function createLevelTwoHouse(house)
 	addHouseUpgradePrompt(body)
 end
 
-local function createLevelThreeHouse(house)
+local function createLevelThreeHouse(house, plotBase)
 	-- Уровень 3: большой укреплённый дом с высокой крышей и вторым крылом.
 	local body = createPart(
 		"HouseBody",
 		Vector3.new(18, 10, 14),
-		PLOT_POSITION + Vector3.new(0, 5.5, 0),
+		plotOffsetCFrame(plotBase, Vector3.new(0, 5.5, 0)),
 		Color3.fromRGB(205, 155, 90),
 		house
 	)
@@ -745,7 +751,7 @@ local function createLevelThreeHouse(house)
 	createPart(
 		"HouseLeftWing",
 		Vector3.new(7, 7, 10),
-		PLOT_POSITION + Vector3.new(-12, 4, 1),
+		plotOffsetCFrame(plotBase, Vector3.new(-12, 4, 1)),
 		Color3.fromRGB(185, 130, 75),
 		house
 	)
@@ -753,7 +759,7 @@ local function createLevelThreeHouse(house)
 	createPart(
 		"HouseRightWing",
 		Vector3.new(7, 7, 10),
-		PLOT_POSITION + Vector3.new(12, 4, 1),
+		plotOffsetCFrame(plotBase, Vector3.new(12, 4, 1)),
 		Color3.fromRGB(185, 130, 75),
 		house
 	)
@@ -761,7 +767,7 @@ local function createLevelThreeHouse(house)
 	createPart(
 		"HouseRoof",
 		Vector3.new(20, 2.5, 16),
-		PLOT_POSITION + Vector3.new(0, 11.75, 0),
+		plotOffsetCFrame(plotBase, Vector3.new(0, 11.75, 0)),
 		Color3.fromRGB(115, 35, 35),
 		house
 	)
@@ -769,7 +775,7 @@ local function createLevelThreeHouse(house)
 	createPart(
 		"LeftWingRoof",
 		Vector3.new(8, 2, 11),
-		PLOT_POSITION + Vector3.new(-12, 8.5, 1),
+		plotOffsetCFrame(plotBase, Vector3.new(-12, 8.5, 1)),
 		Color3.fromRGB(115, 35, 35),
 		house
 	)
@@ -777,7 +783,7 @@ local function createLevelThreeHouse(house)
 	createPart(
 		"RightWingRoof",
 		Vector3.new(8, 2, 11),
-		PLOT_POSITION + Vector3.new(12, 8.5, 1),
+		plotOffsetCFrame(plotBase, Vector3.new(12, 8.5, 1)),
 		Color3.fromRGB(115, 35, 35),
 		house
 	)
@@ -785,7 +791,7 @@ local function createLevelThreeHouse(house)
 	createPart(
 		"HouseDoor",
 		Vector3.new(3.5, 5, 0.3),
-		PLOT_POSITION + Vector3.new(0, 3, -7.15),
+		plotOffsetCFrame(plotBase, Vector3.new(0, 3, -7.15)),
 		Color3.fromRGB(75, 45, 25),
 		house
 	)
@@ -793,7 +799,7 @@ local function createLevelThreeHouse(house)
 	createPart(
 		"HouseWindowLeft",
 		Vector3.new(2.2, 2.2, 0.3),
-		PLOT_POSITION + Vector3.new(-5, 6, -7.15),
+		plotOffsetCFrame(plotBase, Vector3.new(-5, 6, -7.15)),
 		Color3.fromRGB(180, 230, 255),
 		house
 	)
@@ -801,7 +807,7 @@ local function createLevelThreeHouse(house)
 	createPart(
 		"HouseWindowRight",
 		Vector3.new(2.2, 2.2, 0.3),
-		PLOT_POSITION + Vector3.new(5, 6, -7.15),
+		plotOffsetCFrame(plotBase, Vector3.new(5, 6, -7.15)),
 		Color3.fromRGB(180, 230, 255),
 		house
 	)
@@ -817,7 +823,11 @@ local function removeStorageBuildSpot(plotModel)
 	end
 end
 
-local function createStorageBuildSpot(plotModel)
+local function storagePlotCFrame(plotBase, localOffset)
+	return plotOffsetCFrame(plotBase, Vector3.new(-12, 0, 14) + localOffset)
+end
+
+local function createStorageBuildSpot(plotModel, plotBase)
 	if plotModel:FindFirstChild("StorageBuilding") then
 		removeStorageBuildSpot(plotModel)
 		return nil
@@ -832,7 +842,7 @@ local function createStorageBuildSpot(plotModel)
 	local buildSpot = createPart(
 		"StorageBuildSpot",
 		Vector3.new(8, 0.35, 6),
-		STORAGE_POSITION + Vector3.new(0, 0.45, 0),
+		storagePlotCFrame(plotBase, Vector3.new(0, 0.45, 0)),
 		Color3.fromRGB(210, 185, 95),
 		plotModel
 	)
@@ -844,7 +854,7 @@ local function createStorageBuildSpot(plotModel)
 	return buildSpot
 end
 
-local function updateStorageLevelVisual(storage, storageLevel)
+local function updateStorageLevelVisual(storage, plotBase, storageLevel)
 	local existingReinforcement = storage:FindFirstChild("StorageReinforcement")
 	local existingExtraCrate = storage:FindFirstChild("StorageExtraCrate")
 
@@ -864,7 +874,7 @@ local function updateStorageLevelVisual(storage, storageLevel)
 		createPart(
 			"StorageReinforcement",
 			Vector3.new(8.6, 0.35, 6.6),
-			STORAGE_POSITION + Vector3.new(0, 5.55, 0),
+			storagePlotCFrame(plotBase, Vector3.new(0, 5.55, 0)),
 			Color3.fromRGB(95, 95, 100),
 			storage
 		).Material = Enum.Material.Metal
@@ -874,7 +884,7 @@ local function updateStorageLevelVisual(storage, storageLevel)
 		createPart(
 			"StorageExtraCrate",
 			Vector3.new(2.2, 1.4, 1.8),
-			STORAGE_POSITION + Vector3.new(-3, 1.1, 1.4),
+			storagePlotCFrame(plotBase, Vector3.new(-3, 1.1, 1.4)),
 			Color3.fromRGB(130, 90, 50),
 			storage
 		)
@@ -895,14 +905,14 @@ local function updateStoragePrompt(storage, storageLevel)
 	end
 end
 
-local function createStorageBuilding(plotModel, storageLevel)
+local function createStorageBuilding(plotModel, plotBase, storageLevel)
 	removeStorageBuildSpot(plotModel)
 	storageLevel = storageLevel or 1
 
 	local existingStorage = plotModel:FindFirstChild("StorageBuilding")
 
 	if existingStorage then
-		updateStorageLevelVisual(existingStorage, storageLevel)
+		updateStorageLevelVisual(existingStorage, plotBase, storageLevel)
 		updateStoragePrompt(existingStorage, storageLevel)
 		return existingStorage
 	end
@@ -914,7 +924,7 @@ local function createStorageBuilding(plotModel, storageLevel)
 	createPart(
 		"StorageBody",
 		Vector3.new(8, 5, 6),
-		STORAGE_POSITION + Vector3.new(0, 3, 0),
+		storagePlotCFrame(plotBase, Vector3.new(0, 3, 0)),
 		Color3.fromRGB(130, 85, 45),
 		storage
 	)
@@ -922,7 +932,7 @@ local function createStorageBuilding(plotModel, storageLevel)
 	createPart(
 		"StorageRoof",
 		Vector3.new(9, 1.5, 7),
-		STORAGE_POSITION + Vector3.new(0, 6.25, 0),
+		storagePlotCFrame(plotBase, Vector3.new(0, 6.25, 0)),
 		Color3.fromRGB(95, 50, 35),
 		storage
 	)
@@ -930,7 +940,7 @@ local function createStorageBuilding(plotModel, storageLevel)
 	createPart(
 		"StorageDoor",
 		Vector3.new(2.2, 3, 0.3),
-		STORAGE_POSITION + Vector3.new(0, 2.25, -3.15),
+		storagePlotCFrame(plotBase, Vector3.new(0, 2.25, -3.15)),
 		Color3.fromRGB(65, 40, 25),
 		storage
 	)
@@ -938,12 +948,12 @@ local function createStorageBuilding(plotModel, storageLevel)
 	createPart(
 		"StorageCrate",
 		Vector3.new(2.5, 1.5, 2),
-		STORAGE_POSITION + Vector3.new(3, 1.15, 1.5),
+		storagePlotCFrame(plotBase, Vector3.new(3, 1.15, 1.5)),
 		Color3.fromRGB(160, 105, 55),
 		storage
 	)
 
-	updateStorageLevelVisual(storage, storageLevel)
+	updateStorageLevelVisual(storage, plotBase, storageLevel)
 	updateStoragePrompt(storage, storageLevel)
 
 	return storage
@@ -963,7 +973,11 @@ local function removeWorkshopBuildSpot(plotModel)
 	end
 end
 
-local function createWorkshopBuildSign(plotModel)
+local function workshopPlotCFrame(plotBase, localOffset)
+	return plotOffsetCFrame(plotBase, Vector3.new(13, 0.8, 11) + localOffset)
+end
+
+local function createWorkshopBuildSign(plotModel, plotBase)
 	local existingSign = plotModel:FindFirstChild("WorkshopBuildSign")
 
 	if existingSign then
@@ -974,12 +988,12 @@ local function createWorkshopBuildSign(plotModel)
 	signModel.Name = "WorkshopBuildSign"
 	signModel.Parent = plotModel
 
-	local signPosition = WORKSHOP_POSITION + Vector3.new(0, 1.4, -5.5)
+	local signCFrame = workshopPlotCFrame(plotBase, Vector3.new(0, 1.4, -5.5))
 
 	createPart(
 		"WorkshopBuildSignLeftPost",
 		Vector3.new(0.35, 2.4, 0.35),
-		signPosition + Vector3.new(-2.4, 0, 0),
+		signCFrame * CFrame.new(-2.4, 0, 0),
 		Color3.fromRGB(90, 60, 35),
 		signModel
 	)
@@ -987,7 +1001,7 @@ local function createWorkshopBuildSign(plotModel)
 	createPart(
 		"WorkshopBuildSignRightPost",
 		Vector3.new(0.35, 2.4, 0.35),
-		signPosition + Vector3.new(2.4, 0, 0),
+		signCFrame * CFrame.new(2.4, 0, 0),
 		Color3.fromRGB(90, 60, 35),
 		signModel
 	)
@@ -995,7 +1009,7 @@ local function createWorkshopBuildSign(plotModel)
 	local board = createPart(
 		"WorkshopBuildSignBoard",
 		Vector3.new(5.8, 1.8, 0.35),
-		signPosition + Vector3.new(0, 1.05, 0),
+		signCFrame * CFrame.new(0, 1.05, 0),
 		Color3.fromRGB(210, 185, 240),
 		signModel
 	)
@@ -1020,7 +1034,7 @@ local function createWorkshopBuildSign(plotModel)
 	return signModel
 end
 
-local function createWorkshopBuildSpot(player, plotModel)
+local function createWorkshopBuildSpot(player, plotModel, plotBase)
 	if plotModel:FindFirstChild("WorkshopBuilding") then
 		removeWorkshopBuildSpot(plotModel)
 		return nil
@@ -1030,14 +1044,14 @@ local function createWorkshopBuildSpot(player, plotModel)
 
 	if existingBuildSpot then
 		addWorkshopBuildPrompt(existingBuildSpot)
-		createWorkshopBuildSign(plotModel)
+		createWorkshopBuildSign(plotModel, plotBase)
 		return existingBuildSpot
 	end
 
 	local buildSpot = createPart(
 		"WorkshopBuildSpot",
 		Vector3.new(9, 0.35, 9),
-		WORKSHOP_POSITION,
+		workshopPlotCFrame(plotBase, Vector3.new(0, 0, 0)),
 		Color3.fromRGB(160, 120, 220),
 		plotModel
 	)
@@ -1046,13 +1060,13 @@ local function createWorkshopBuildSpot(player, plotModel)
 	buildSpot.CanCollide = false
 
 	addWorkshopBuildPrompt(buildSpot)
-	createWorkshopBuildSign(plotModel)
+	createWorkshopBuildSign(plotModel, plotBase)
 
 	print(string.format("[PlotService] Created workshop build spot for %s.", player.Name))
 	return buildSpot
 end
 
-local function createWorkshopBuilding(player, plotModel)
+local function createWorkshopBuilding(player, plotModel, plotBase)
 	removeWorkshopBuildSpot(plotModel)
 
 	local existingWorkshop = plotModel:FindFirstChild("WorkshopBuilding")
@@ -1068,7 +1082,7 @@ local function createWorkshopBuilding(player, plotModel)
 	createPart(
 		"WorkshopBase",
 		Vector3.new(10, 0.5, 9),
-		WORKSHOP_POSITION + Vector3.new(0, 0.05, 0),
+		workshopPlotCFrame(plotBase, Vector3.new(0, 0.05, 0)),
 		Color3.fromRGB(95, 90, 100),
 		workshop
 	)
@@ -1076,7 +1090,7 @@ local function createWorkshopBuilding(player, plotModel)
 	createPart(
 		"WorkshopBody",
 		Vector3.new(8, 5, 7),
-		WORKSHOP_POSITION + Vector3.new(0, 2.85, 0),
+		workshopPlotCFrame(plotBase, Vector3.new(0, 2.85, 0)),
 		Color3.fromRGB(115, 95, 135),
 		workshop
 	)
@@ -1084,7 +1098,7 @@ local function createWorkshopBuilding(player, plotModel)
 	createPart(
 		"WorkshopRoof",
 		Vector3.new(9.5, 1.4, 8.5),
-		WORKSHOP_POSITION + Vector3.new(0, 5.95, 0),
+		workshopPlotCFrame(plotBase, Vector3.new(0, 5.95, 0)),
 		Color3.fromRGB(65, 55, 85),
 		workshop
 	)
@@ -1092,7 +1106,7 @@ local function createWorkshopBuilding(player, plotModel)
 	createPart(
 		"WorkshopDoor",
 		Vector3.new(2.2, 3, 0.3),
-		WORKSHOP_POSITION + Vector3.new(-2.3, 1.95, -3.65),
+		workshopPlotCFrame(plotBase, Vector3.new(-2.3, 1.95, -3.65)),
 		Color3.fromRGB(55, 38, 35),
 		workshop
 	)
@@ -1100,7 +1114,7 @@ local function createWorkshopBuilding(player, plotModel)
 	createPart(
 		"WorkshopWindow",
 		Vector3.new(2.2, 1.6, 0.3),
-		WORKSHOP_POSITION + Vector3.new(2.2, 3.2, -3.65),
+		workshopPlotCFrame(plotBase, Vector3.new(2.2, 3.2, -3.65)),
 		Color3.fromRGB(180, 225, 240),
 		workshop
 	)
@@ -1108,7 +1122,7 @@ local function createWorkshopBuilding(player, plotModel)
 	createPart(
 		"Workbench",
 		Vector3.new(3, 1.2, 1.6),
-		WORKSHOP_POSITION + Vector3.new(3.4, 1.25, 1.7),
+		workshopPlotCFrame(plotBase, Vector3.new(3.4, 1.25, 1.7)),
 		Color3.fromRGB(145, 90, 50),
 		workshop
 	)
@@ -1116,7 +1130,7 @@ local function createWorkshopBuilding(player, plotModel)
 	createPart(
 		"WorkshopAnvil",
 		Vector3.new(1.8, 0.8, 1),
-		WORKSHOP_POSITION + Vector3.new(-3.2, 1.05, 1.8),
+		workshopPlotCFrame(plotBase, Vector3.new(-3.2, 1.05, 1.8)),
 		Color3.fromRGB(70, 75, 80),
 		workshop
 	)
@@ -1139,7 +1153,12 @@ local function removeForgeBuildSite(plotModel)
 	end
 end
 
-local function createForgeBuildSign(plotModel)
+local function forgePlotCFrame(plotBase, localOffset)
+	local groundY = (plotBase.Size.Y / 2) + localOffset.Y
+	return plotBase.CFrame * CFrame.new(13 + localOffset.X, groundY, -11 + localOffset.Z)
+end
+
+local function createForgeBuildSign(plotModel, plotBase)
 	local existingSign = plotModel:FindFirstChild("ForgeBuildSign")
 
 	if existingSign then
@@ -1150,12 +1169,12 @@ local function createForgeBuildSign(plotModel)
 	signModel.Name = "ForgeBuildSign"
 	signModel.Parent = plotModel
 
-	local signPosition = FORGE_POSITION + Vector3.new(0, 1.4, -5.4)
+	local signCFrame = forgePlotCFrame(plotBase, Vector3.new(0, 1.4, -5.4))
 
 	createPart(
 		"ForgeBuildSignLeftPost",
 		Vector3.new(0.35, 2.4, 0.35),
-		signPosition + Vector3.new(-2.4, 0, 0),
+		signCFrame * CFrame.new(-2.4, 0, 0),
 		Color3.fromRGB(90, 60, 35),
 		signModel
 	)
@@ -1163,7 +1182,7 @@ local function createForgeBuildSign(plotModel)
 	createPart(
 		"ForgeBuildSignRightPost",
 		Vector3.new(0.35, 2.4, 0.35),
-		signPosition + Vector3.new(2.4, 0, 0),
+		signCFrame * CFrame.new(2.4, 0, 0),
 		Color3.fromRGB(90, 60, 35),
 		signModel
 	)
@@ -1171,7 +1190,7 @@ local function createForgeBuildSign(plotModel)
 	local board = createPart(
 		"ForgeBuildSignBoard",
 		Vector3.new(5.8, 1.8, 0.35),
-		signPosition + Vector3.new(0, 1.05, 0),
+		signCFrame * CFrame.new(0, 1.05, 0),
 		Color3.fromRGB(210, 185, 120),
 		signModel
 	)
@@ -1196,7 +1215,14 @@ local function createForgeBuildSign(plotModel)
 	return signModel
 end
 
-local function createForgeBuildSite(player, plotModel)
+local function createForgeBuildSite(player, plotModel, plotBase)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if profile and PlayerDataService.GetBuildingLevel(profile, "Forge") >= 1 then
+		removeForgeBuildSite(plotModel)
+		return nil
+	end
+
 	if plotModel:FindFirstChild("Forge") then
 		removeForgeBuildSite(plotModel)
 		return nil
@@ -1206,14 +1232,14 @@ local function createForgeBuildSite(player, plotModel)
 
 	if existingBuildSite then
 		addForgeBuildPrompt(existingBuildSite)
-		createForgeBuildSign(plotModel)
+		createForgeBuildSign(plotModel, plotBase)
 		return existingBuildSite
 	end
 
 	local buildSite = createPart(
 		"ForgeBuildSite",
 		Vector3.new(9, 0.35, 8),
-		FORGE_POSITION,
+		forgePlotCFrame(plotBase, Vector3.new(0, 0.35 / 2, 0)),
 		Color3.fromRGB(195, 150, 85),
 		plotModel
 	)
@@ -1222,86 +1248,75 @@ local function createForgeBuildSite(player, plotModel)
 	buildSite.CanCollide = false
 
 	addForgeBuildPrompt(buildSite)
-	createForgeBuildSign(plotModel)
+	createForgeBuildSign(plotModel, plotBase)
 
 	print("[Forge] Created forge build site")
 	return buildSite
 end
 
-local function createForge(player, plotModel)
+local function createForge(player, plotModel, plotBase)
 	removeForgeBuildSite(plotModel)
 
 	local existingForge = plotModel:FindFirstChild("Forge")
 
-	if existingForge then
+	if existingForge and existingForge:FindFirstChild("ForgeBase") then
 		addForgeSmeltPrompt(existingForge)
 		addForgePartsPrompt(existingForge)
 		return existingForge
+	end
+
+	if existingForge then
+		existingForge:Destroy()
+	end
+
+	plotBase = plotBase or getPlotBase(plotModel)
+
+	if not plotBase then
+		print("[PlotService] Error: Plot base not found for forge generation!")
+		return nil
 	end
 
 	local forge = Instance.new("Model")
 	forge.Name = "Forge"
 	forge.Parent = plotModel
 
-	createPart(
-		"ForgeBase",
-		Vector3.new(10, 0.5, 8),
-		FORGE_POSITION + Vector3.new(0, 0.05, 0),
-		Color3.fromRGB(85, 80, 75),
-		forge
-	)
+	local forgeCenterCFrame = forgePlotCFrame(plotBase, Vector3.new(0, 0.75, 0))
 
-	local hearth = createPart(
-		"ForgeHearth",
-		Vector3.new(5.5, 3.2, 4.5),
-		FORGE_POSITION + Vector3.new(-1.5, 1.9, 0),
-		Color3.fromRGB(55, 50, 48),
-		forge
-	)
+	local base = createPart("ForgeBase", Vector3.new(10, 1.5, 8), Vector3.new(), Color3.fromRGB(85, 80, 75), forge)
+	base.Material = Enum.Material.Slate
+	base.CFrame = forgeCenterCFrame
+
+	local hearth = createPart("ForgeHearth", Vector3.new(5.5, 0.2, 4.5), Vector3.new(), Color3.fromRGB(55, 50, 48), forge)
 	hearth.Material = Enum.Material.Slate
+	hearth.CFrame = forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + (0.2 / 2), 0)
 
-	local firebox = createPart(
-		"ForgeFirebox",
-		Vector3.new(3.2, 1.3, 0.35),
-		FORGE_POSITION + Vector3.new(-1.5, 1.35, -2.3),
-		Color3.fromRGB(210, 95, 40),
-		forge
-	)
+	local firebox = createPart("ForgeFirebox", Vector3.new(5.1, 0.2, 4.1), Vector3.new(), Color3.fromRGB(210, 95, 40), forge)
 	firebox.Material = Enum.Material.Neon
+	firebox.CFrame = forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + 0.2 + (0.2 / 2), 0)
 
-	local chimney = createPart(
-		"ForgeChimney",
-		Vector3.new(1.8, 4.5, 1.8),
-		FORGE_POSITION + Vector3.new(-1.5, 5.65, 0.8),
-		Color3.fromRGB(45, 45, 45),
-		forge
-	)
-	chimney.Material = Enum.Material.Slate
+	local backWall = createPart("ForgeBackWall", Vector3.new(5.5, 5, 1), Vector3.new(), Color3.fromRGB(55, 50, 48), forge)
+	backWall.Material = Enum.Material.Slate
+	backWall.CFrame = forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + (5 / 2), 1.75)
 
-	local anvil = createPart(
-		"ForgeAnvil",
-		Vector3.new(2.5, 1, 1.5),
-		FORGE_POSITION + Vector3.new(3.2, 1, 1.7),
-		Color3.fromRGB(70, 75, 80),
-		forge
-	)
+	local hood = createPart("ForgeHood", Vector3.new(5.5, 1.5, 1), Vector3.new(), Color3.fromRGB(55, 50, 48), forge)
+	hood.Material = Enum.Material.Slate
+	hood.CFrame = forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + 5 - (1.5 / 2), -1.75)
+
+	local chimney = createPart("ForgeChimney", Vector3.new(2, 6, 2), Vector3.new(), Color3.fromRGB(45, 45, 45), forge)
+	chimney.Material = Enum.Material.Brick
+	chimney.CFrame = forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + 5 + (6 / 2), 0)
+
+	local anvil = createPart("ForgeAnvil", Vector3.new(2.5, 1, 1.5), Vector3.new(), Color3.fromRGB(70, 75, 80), forge)
 	anvil.Material = Enum.Material.Metal
+	anvil.CFrame = forgeCenterCFrame * CFrame.new(3.2, -(1.5 / 2) + (1 / 2), 1.7)
 
-	local sign = createPart(
-		"ForgeSignBoard",
-		Vector3.new(5, 1.4, 0.35),
-		FORGE_POSITION + Vector3.new(0, 3.2, -4.2),
-		Color3.fromRGB(230, 195, 115),
-		forge
-	)
+	local sign = createPart("ForgeSignBoard", Vector3.new(5, 1.4, 0.35), Vector3.new(), Color3.fromRGB(230, 195, 115), forge)
+	sign.CFrame = forgeCenterCFrame * CFrame.new(0, 2.45, -4.2)
 
 	local surfaceGui = Instance.new("SurfaceGui")
 	surfaceGui.Name = "ForgeSignSurface"
 	surfaceGui.Face = Enum.NormalId.Front
-	surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	surfaceGui.PixelsPerStud = 50
 	surfaceGui.Parent = sign
-
 	local label = Instance.new("TextLabel")
 	label.Name = "ForgeSignLabel"
 	label.Size = UDim2.fromScale(1, 1)
@@ -1314,7 +1329,6 @@ local function createForge(player, plotModel)
 
 	addForgeSmeltPrompt(forge)
 	addForgePartsPrompt(forge)
-	print(string.format("[Forge] Restored forge for %s", player.Name))
 	return forge
 end
 
@@ -1325,10 +1339,18 @@ local function updateStorageVisual(player, profile)
 		return false
 	end
 
-	if profile.StorageBuilt then
-		createStorageBuilding(plotModel, profile.StorageLevel or 1)
+	local plotBase = getPlotBase(plotModel)
+
+	if not plotBase then
+		return false
+	end
+
+	local storageLevel = PlayerDataService.GetBuildingLevel(profile, "Storage")
+
+	if storageLevel >= 1 then
+		createStorageBuilding(plotModel, plotBase, storageLevel)
 	else
-		createStorageBuildSpot(plotModel)
+		createStorageBuildSpot(plotModel, plotBase)
 	end
 
 	return true
@@ -1341,17 +1363,26 @@ local function updateWorkshopVisual(player, profile)
 		return false
 	end
 
-	if profile.WorkshopBuilt then
+	local plotBase = getPlotBase(plotModel)
+
+	if not plotBase then
+		return false
+	end
+
+	local workshopLevel = PlayerDataService.GetBuildingLevel(profile, "Workshop")
+	local storageLevel = PlayerDataService.GetBuildingLevel(profile, "Storage")
+
+	if workshopLevel >= 1 then
 		print(string.format("[PlotService] Workshop already built for %s. Restoring visual.", player.Name))
-		local workshop = createWorkshopBuilding(player, plotModel)
+		local workshop = createWorkshopBuilding(player, plotModel, plotBase)
 
 		if (profile.ToolKitLevel or 0) < 2 then
 			addToolKitCraftPrompt(player, workshop)
 		else
 			removeToolKitCraftPrompt(workshop)
 		end
-	elseif profile.StorageBuilt then
-		createWorkshopBuildSpot(player, plotModel)
+	elseif storageLevel >= 1 then
+		createWorkshopBuildSpot(player, plotModel, plotBase)
 	else
 		removeWorkshopBuildSpot(plotModel)
 	end
@@ -1366,22 +1397,30 @@ local function updateForgeVisual(player, profile)
 		return false
 	end
 
-	if (profile.ForgeLevel or 0) >= 1 then
-		createForge(player, plotModel)
+	local plotBase = getPlotBase(plotModel)
+
+	if not plotBase then
+		return false
+	end
+
+	if PlayerDataService.GetBuildingLevel(profile, "Forge") >= 1 then
+		createForge(player, plotModel, plotBase)
 	else
+		removeForgeBuildSite(plotModel)
+
 		local existingForge = plotModel:FindFirstChild("Forge")
 
 		if existingForge then
 			existingForge:Destroy()
 		end
 
-		createForgeBuildSite(player, plotModel)
+		createForgeBuildSite(player, plotModel, plotBase)
 	end
 
 	return true
 end
 
-local function rebuildHouse(plotModel, houseLevel)
+local function rebuildHouse(plotModel, plotBase, houseLevel)
 	local oldHouse = plotModel:FindFirstChild("House")
 
 	if oldHouse then
@@ -1393,11 +1432,11 @@ local function rebuildHouse(plotModel, houseLevel)
 	house.Parent = plotModel
 
 	if houseLevel <= 1 then
-		createLevelOneHouse(house)
+		createLevelOneHouse(house, plotBase)
 	elseif houseLevel == 2 then
-		createLevelTwoHouse(house)
+		createLevelTwoHouse(house, plotBase)
 	else
-		createLevelThreeHouse(house)
+		createLevelThreeHouse(house, plotBase)
 	end
 
 	return house
@@ -1410,7 +1449,13 @@ local function updateHouseVisual(player, houseLevel)
 		return false
 	end
 
-	rebuildHouse(plotModel, houseLevel)
+	local plotBase = getPlotBase(plotModel)
+
+	if not plotBase then
+		return false
+	end
+
+	rebuildHouse(plotModel, plotBase, houseLevel)
 	return true
 end
 
@@ -1433,6 +1478,58 @@ function PlotService.UnlockPlot(player)
 	return true
 end
 
+local function restorePlotBuildingVisuals(player, plotModel, profile)
+	local plotBase = getPlotBase(plotModel)
+
+	if not plotBase then
+		warn(string.format("[PlotService] Plot base not found while restoring buildings for %s.", player.Name))
+		return
+	end
+
+	local houseLevel = PlayerDataService.GetBuildingLevel(profile, "House")
+	local storageLevel = PlayerDataService.GetBuildingLevel(profile, "Storage")
+	local workshopLevel = PlayerDataService.GetBuildingLevel(profile, "Workshop")
+	local forgeLevel = PlayerDataService.GetBuildingLevel(profile, "Forge")
+
+	rebuildHouse(plotModel, plotBase, houseLevel)
+
+	if storageLevel >= 1 then
+		createStorageBuilding(plotModel, plotBase, storageLevel)
+	else
+		createStorageBuildSpot(plotModel, plotBase)
+	end
+
+	if workshopLevel >= 1 then
+		print(string.format("[PlotService] Workshop already built for %s. Restoring visual.", player.Name))
+		local workshop = createWorkshopBuilding(player, plotModel, plotBase)
+
+		if (profile.ToolKitLevel or 0) < 2 then
+			addToolKitCraftPrompt(player, workshop)
+		else
+			removeToolKitCraftPrompt(workshop)
+		end
+	elseif storageLevel >= 1 then
+		createWorkshopBuildSpot(player, plotModel, plotBase)
+	else
+		removeWorkshopBuildSpot(plotModel)
+	end
+
+	if forgeLevel >= 1 then
+		createForge(player, plotModel, plotBase)
+		print(string.format("[PlotService] %s built forge visual.", player.Name))
+	else
+		removeForgeBuildSite(plotModel)
+
+		local staleForge = plotModel:FindFirstChild("Forge")
+
+		if staleForge then
+			staleForge:Destroy()
+		end
+
+		createForgeBuildSite(player, plotModel, plotBase)
+	end
+end
+
 function PlotService.CreateTestPlot(player)
 	local profile = PlayerDataService.GetProfile(player)
 
@@ -1445,9 +1542,7 @@ function PlotService.CreateTestPlot(player)
 
 	if existingPlot then
 		print(string.format("[PlotService] Test plot for %s already exists.", player.Name))
-		updateStorageVisual(player, profile)
-		updateWorkshopVisual(player, profile)
-		updateForgeVisual(player, profile)
+		restorePlotBuildingVisuals(player, existingPlot, profile)
 		return existingPlot
 	end
 
@@ -1455,22 +1550,19 @@ function PlotService.CreateTestPlot(player)
 	plotModel.Name = getPlotName(player)
 	plotModel.Parent = Workspace
 
-	-- Основание личного участка.
 	local base = createPart(
 		"PlotBase",
 		PLOT_SIZE,
-		PLOT_POSITION,
+		CFrame.new(PLOT_POSITION),
 		Color3.fromRGB(80, 155, 85),
 		plotModel
 	)
 	base.Material = Enum.Material.Grass
+	plotModel.PrimaryPart = base
 
-	createPlayerSign(player, plotModel)
-	createPlotAreaSign(plotModel)
-	rebuildHouse(plotModel, profile.HouseLevel)
-	updateStorageVisual(player, profile)
-	updateWorkshopVisual(player, profile)
-	updateForgeVisual(player, profile)
+	createPlayerSign(player, plotModel, base)
+	createPlotAreaSign(plotModel, base)
+	restorePlotBuildingVisuals(player, plotModel, profile)
 
 	print(string.format("[PlotService] Created test plot for %s.", player.Name))
 	return plotModel
@@ -1487,7 +1579,7 @@ function PlotService.CanBuildStorage(player)
 		return false, "участок ещё не открыт"
 	end
 
-	if profile.StorageBuilt then
+	if PlayerDataService.GetBuildingLevel(profile, "Storage") >= 1 then
 		return false, "склад уже построен"
 	end
 
@@ -1541,8 +1633,7 @@ function PlotService.TryBuildStorage(player)
 		return false
 	end
 
-	profile.StorageBuilt = true
-	profile.StorageLevel = math.max(profile.StorageLevel or 0, 1)
+	PlayerDataService.SetBuildingLevel(profile, "Storage", math.max(PlayerDataService.GetBuildingLevel(profile, "Storage"), 1))
 	PlayerDataService.MarkDirty(player)
 	updateStorageVisual(player, profile)
 	updateWorkshopVisual(player, profile)
@@ -1578,11 +1669,11 @@ function PlotService.CanUpgradeStorage(player)
 		return false, "профиль не найден"
 	end
 
-	if not profile.StorageBuilt then
+	local storageLevel = PlayerDataService.GetBuildingLevel(profile, "Storage")
+
+	if storageLevel < 1 then
 		return false, "склад не построен"
 	end
-
-	local storageLevel = profile.StorageLevel or 1
 
 	if storageLevel >= MAX_STORAGE_LEVEL then
 		return false, "склад уже улучшен до максимума"
@@ -1638,8 +1729,7 @@ function PlotService.TryUpgradeStorage(player)
 		return false
 	end
 
-	profile.StorageLevel = nextStorageLevel
-	profile.StorageBuilt = true
+	PlayerDataService.SetBuildingLevel(profile, "Storage", nextStorageLevel)
 	PlayerDataService.MarkDirty(player)
 	updateStorageVisual(player, profile)
 
@@ -1651,9 +1741,10 @@ function PlotService.TryUpgradeStorage(player)
 		PlayerDataService.SaveProfile(player)
 	end
 
-	sendPlayerMessage(player, string.format("Склад улучшен до уровня %d", profile.StorageLevel))
+	local upgradedStorageLevel = PlayerDataService.GetBuildingLevel(profile, "Storage")
+	sendPlayerMessage(player, string.format("Склад улучшен до уровня %d", upgradedStorageLevel))
 	hideActionPreview(player)
-	print(string.format("[PlotService] %s upgraded storage to level %d.", player.Name, profile.StorageLevel))
+	print(string.format("[PlotService] %s upgraded storage to level %d.", player.Name, upgradedStorageLevel))
 
 	return true
 end
@@ -1669,7 +1760,7 @@ function PlotService.CanBuildForge(player)
 		return false, "участок еще не открыт"
 	end
 
-	if (profile.ForgeLevel or 0) >= 1 then
+	if PlayerDataService.GetBuildingLevel(profile, "Forge") >= 1 then
 		return false, "кузница уже построена"
 	end
 
@@ -1722,7 +1813,7 @@ function PlotService.TryBuildForge(player)
 		return false
 	end
 
-	profile.ForgeLevel = 1
+	PlayerDataService.SetBuildingLevel(profile, "Forge", 1)
 	PlayerDataService.MarkDirty(player)
 	updateForgeVisual(player, profile)
 
@@ -1748,7 +1839,7 @@ function PlotService.CanSmeltMetalIngot(player)
 		return false, "profile not found"
 	end
 
-	if (profile.ForgeLevel or 0) < 1 then
+	if PlayerDataService.GetBuildingLevel(profile, "Forge") < 1 then
 		return false, "forge not built"
 	end
 
@@ -1813,7 +1904,7 @@ function PlotService.CanMakeMetalParts(player)
 		return false, "profile not found"
 	end
 
-	if (profile.ForgeLevel or 0) < 1 then
+	if PlayerDataService.GetBuildingLevel(profile, "Forge") < 1 then
 		return false, "forge not built"
 	end
 
@@ -1882,11 +1973,11 @@ function PlotService.CanBuildWorkshop(player)
 		return false, "участок ещё не открыт"
 	end
 
-	if profile.StorageBuilt ~= true then
+	if PlayerDataService.GetBuildingLevel(profile, "Storage") < 1 then
 		return false, "склад не построен"
 	end
 
-	if profile.WorkshopBuilt then
+	if PlayerDataService.GetBuildingLevel(profile, "Workshop") >= 1 then
 		return false, "мастерская уже построена"
 	end
 
@@ -1945,7 +2036,7 @@ function PlotService.TryBuildWorkshop(player)
 		return false
 	end
 
-	profile.WorkshopBuilt = true
+	PlayerDataService.SetBuildingLevel(profile, "Workshop", 1)
 	PlayerDataService.MarkDirty(player)
 	updateWorkshopVisual(player, profile)
 
@@ -1970,7 +2061,7 @@ function PlotService.CanCraftToolKit(player)
 		return false, "профиль не найден"
 	end
 
-	if profile.WorkshopBuilt ~= true then
+	if PlayerDataService.GetBuildingLevel(profile, "Workshop") < 1 then
 		return false, "мастерская не построена"
 	end
 
@@ -2076,7 +2167,7 @@ function PlotService.CanUpgradeHouse(player)
 		return false, "участок ещё не открыт"
 	end
 
-	local currentLevel = profile.HouseLevel or 1
+	local currentLevel = PlayerDataService.GetBuildingLevel(profile, "House")
 
 	if currentLevel >= MAX_HOUSE_LEVEL then
 		return false, "дом уже улучшен до максимума"
@@ -2120,7 +2211,7 @@ function PlotService.TryUpgradeHouse(player)
 	end
 
 	local profile = PlayerDataService.GetProfile(player)
-	local oldLevel = profile.HouseLevel
+	local oldLevel = PlayerDataService.GetBuildingLevel(profile, "House")
 
 	local resourcesSpent, spendMissingResourcesMessage = CurrencyService.SpendResources(player, cost)
 
@@ -2133,9 +2224,10 @@ function PlotService.TryUpgradeHouse(player)
 		return false
 	end
 
-	profile.HouseLevel += 1
+	local newHouseLevel = oldLevel + 1
+	PlayerDataService.SetBuildingLevel(profile, "House", newHouseLevel)
 	PlayerDataService.MarkDirty(player)
-	updateHouseVisual(player, profile.HouseLevel)
+	updateHouseVisual(player, newHouseLevel)
 
 	if PlayerDataService.SendProfileUpdate then
 		PlayerDataService.SendProfileUpdate(player)
@@ -2145,14 +2237,14 @@ function PlotService.TryUpgradeHouse(player)
 		PlayerDataService.SaveProfile(player)
 	end
 
-	sendPlayerMessage(player, string.format("Дом улучшен до уровня %d", profile.HouseLevel))
+	sendPlayerMessage(player, string.format("Дом улучшен до уровня %d", newHouseLevel))
 	hideActionPreview(player)
 
 	print(string.format(
 		"[PlotService] %s upgraded house from level %d to %d. Cost: %s.",
 		player.Name,
 		oldLevel,
-		profile.HouseLevel,
+		newHouseLevel,
 		formatCost(cost)
 	))
 

@@ -107,7 +107,7 @@ local function printProfile(player)
 	print(string.format("  Gold: %d", profile.Gold))
 	print(string.format("  Wood: %d", profile.Wood))
 	print(string.format("  Stone: %d", profile.Stone))
-	print(string.format("  HouseLevel: %d", profile.HouseLevel))
+	print(string.format("  HouseLevel: %d", PlayerDataService.GetBuildingLevel(profile, "House")))
 	print(string.format("  PlotUnlocked: %s", tostring(profile.PlotUnlocked)))
 	print(string.format("  CurrentQuestId: %s", tostring(profile.CurrentQuestId)))
 	print(string.format(
@@ -135,7 +135,7 @@ end
 local function giveLandReward(player, profile)
 	PlotService.UnlockPlot(player)
 	PlotService.CreateTestPlot(player)
-	print(string.format("[NPCService] %s получил землю и дом уровня %d.", player.Name, profile.HouseLevel))
+	print(string.format("[NPCService] %s получил землю и дом уровня %d.", player.Name, PlayerDataService.GetBuildingLevel(profile, "House")))
 end
 
 local function startStorageQuestIfReady(player, profile)
@@ -143,7 +143,7 @@ local function startStorageQuestIfReady(player, profile)
 		return false
 	end
 
-	if profile.CompletedQuests[STORAGE_QUEST_ID] or profile.StorageBuilt == true then
+	if profile.CompletedQuests[STORAGE_QUEST_ID] or PlayerDataService.GetBuildingLevel(profile, "Storage") >= 1 then
 		return false
 	end
 
@@ -151,7 +151,7 @@ local function startStorageQuestIfReady(player, profile)
 		return false
 	end
 
-	if profile.PlotUnlocked ~= true or (profile.HouseLevel or 0) < 1 then
+	if profile.PlotUnlocked ~= true or PlayerDataService.GetBuildingLevel(profile, "House") < 1 then
 		return false
 	end
 

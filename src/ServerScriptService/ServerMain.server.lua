@@ -61,8 +61,10 @@ local function onPlayerAdded(player)
 		-- Если земля уже была открыта в сохранении, восстанавливаем визуальный участок.
 		PlotService.CreateTestPlot(player)
 
-		if profile.HouseLevel > 1 then
-			print(string.format("[ServerMain] Restored house visual for %s at level %d.", player.Name, profile.HouseLevel))
+		local houseLevel = PlayerDataService.GetBuildingLevel(profile, "House")
+
+		if houseLevel > 1 then
+			print(string.format("[ServerMain] Restored house visual for %s at level %d.", player.Name, houseLevel))
 		end
 	end
 end

@@ -136,10 +136,10 @@ local function printStatus(player, profile)
 		profile.Metal or 0,
 		profile.MetalIngot or 0,
 		profile.MetalParts or 0,
-		profile.HouseLevel or 1,
-		profile.StorageLevel or 0,
+		PlayerDataService.GetBuildingLevel(profile, "House"),
+		PlayerDataService.GetBuildingLevel(profile, "Storage"),
 		profile.ToolKitLevel or 0,
-		profile.ForgeLevel or 0,
+		PlayerDataService.GetBuildingLevel(profile, "Forge"),
 		tostring(profile.ForestUnlocked == true),
 		tostring(profile.RockZoneUnlocked == true)
 	))
@@ -234,7 +234,7 @@ local function handleHouseCommand(player, profile, args)
 		return
 	end
 
-	profile.HouseLevel = level
+	PlayerDataService.SetBuildingLevel(profile, "House", level)
 	PlayerDataService.MarkDirty(player)
 	refreshPlotVisual(player, profile)
 	updateAndSaveProfile(player)
@@ -250,16 +250,14 @@ local function handleStorageCommand(player, profile, args)
 		return
 	end
 
-	profile.StorageLevel = level
-	profile.StorageBuilt = level >= 1
+	PlayerDataService.SetBuildingLevel(profile, "Storage", level)
 	PlayerDataService.MarkDirty(player)
 	refreshPlotVisual(player, profile)
 	updateAndSaveProfile(player)
 	sendPlayerMessage(player, string.format("Admin: storage level %d", level))
 	print(string.format(
-		"[AdminService] Set StorageLevel=%d StorageBuilt=%s for %s.",
+		"[AdminService] Set Storage level=%d for %s.",
 		level,
-		tostring(profile.StorageBuilt == true),
 		player.Name
 	))
 end
@@ -272,7 +270,7 @@ local function handleForgeCommand(player, profile, args)
 		return
 	end
 
-	profile.ForgeLevel = level
+	PlayerDataService.SetBuildingLevel(profile, "Forge", level)
 	PlayerDataService.MarkDirty(player)
 	refreshPlotVisual(player, profile)
 	updateAndSaveProfile(player)

@@ -7,6 +7,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PlayerDataService = {}
 
+local BUILDING_IDS = { "House", "Storage", "Workshop", "Forge" }
+
 local profiles = {}
 local profileSaveStateByUserId = {}
 local PROFILE_STORE_NAME = "GoldenLandPlayerProfiles_v1"
@@ -42,6 +44,15 @@ local DEFAULT_RESOURCE_ZONES = {
 		},
 	},
 }
+
+local function createDefaultBuildings()
+	return {
+		House = { Level = 1 },
+		Storage = { Level = 0 },
+		Workshop = { Level = 0 },
+		Forge = { Level = 0 },
+	}
+end
 
 local function createDefaultResourceZones()
 	return {
@@ -105,13 +116,9 @@ local function createDefaultProfile(player)
 		Metal = 0,
 		MetalIngot = 0,
 		MetalParts = 0,
-		HouseLevel = 1,
+		Buildings = createDefaultBuildings(),
 		PlotUnlocked = false,
-		StorageBuilt = false,
-		StorageLevel = 0,
-		WorkshopBuilt = false,
 		ToolKitLevel = 0,
-		ForgeLevel = 0,
 		ForestUnlocked = false,
 		RockZoneUnlocked = false,
 		ForestZoneState = "Locked",
@@ -155,7 +162,7 @@ local function logProfileValues(prefix, profile)
 	local forestState, forestTreeRemainingActions, forestStone01State, forestStone02State = getForestAreaLogValues(profile)
 
 	print(string.format(
-		"[PlayerDataService] %s: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d HouseLevel=%d StorageLevel=%d ToolKitLevel=%d ForgeLevel=%d ForestUnlocked=%s ForestZoneState=%s ForestArea_01.State=%s ForestTreeCluster.RemainingActions=%d ForestStone_01.State=%s ForestStone_02.State=%s",
+		"[PlayerDataService] %s: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d House=%d Storage=%d Workshop=%d Forge=%d ToolKitLevel=%d ForestUnlocked=%s ForestZoneState=%s ForestArea_01.State=%s ForestTreeCluster.RemainingActions=%d ForestStone_01.State=%s ForestStone_02.State=%s",
 		prefix,
 		profile.Gold or 0,
 		profile.Wood or 0,
@@ -163,10 +170,11 @@ local function logProfileValues(prefix, profile)
 		profile.Metal or 0,
 		profile.MetalIngot or 0,
 		profile.MetalParts or 0,
-		profile.HouseLevel or 1,
-		profile.StorageLevel or 0,
+		PlayerDataService.GetBuildingLevel(profile, "House"),
+		PlayerDataService.GetBuildingLevel(profile, "Storage"),
+		PlayerDataService.GetBuildingLevel(profile, "Workshop"),
+		PlayerDataService.GetBuildingLevel(profile, "Forge"),
 		profile.ToolKitLevel or 0,
-		profile.ForgeLevel or 0,
 		tostring(profile.ForestUnlocked == true),
 		profile.ForestZoneState or "nil",
 		forestState,
@@ -358,6 +366,58 @@ local function normalizeForestZoneClearedObjects(savedProfile, profile)
 	return clearedObjects
 end
 
+local function normalizeBuildingLevel(level, fallback)
+	if type(level) ~= "number" then
+		return fallback
+	end
+
+	return math.max(0, math.floor(level))
+end
+
+local function migrateBuildingsFromSavedProfile(savedProfile)
+	local buildings = createDefaultBuildings()
+
+	if type(savedProfile.Buildings) == "table" then
+		for _, buildingId in ipairs(BUILDING_IDS) do
+			local savedBuilding = savedProfile.Buildings[buildingId]
+
+			if type(savedBuilding) == "table" and type(savedBuilding.Level) == "number" then
+				buildings[buildingId].Level = normalizeBuildingLevel(savedBuilding.Level, buildings[buildingId].Level)
+			end
+		end
+	end
+
+	if type(savedProfile.HouseLevel) == "number" then
+		buildings.House.Level = normalizeBuildingLevel(savedProfile.HouseLevel, buildings.House.Level)
+	end
+
+	local storageLevel = 0
+
+	if type(savedProfile.StorageLevel) == "number" then
+		storageLevel = normalizeBuildingLevel(savedProfile.StorageLevel, 0)
+	end
+
+	if savedProfile.StorageBuilt == true and storageLevel < 1 then
+		storageLevel = 1
+	end
+
+	buildings.Storage.Level = math.max(buildings.Storage.Level, storageLevel)
+
+	if savedProfile.WorkshopBuilt == true and buildings.Workshop.Level < 1 then
+		buildings.Workshop.Level = 1
+	end
+
+	if type(savedProfile.ForgeLevel) == "number" then
+		buildings.Forge.Level = normalizeBuildingLevel(savedProfile.ForgeLevel, buildings.Forge.Level)
+	end
+
+	if buildings.House.Level < 1 then
+		buildings.House.Level = 1
+	end
+
+	return buildings
+end
+
 local function normalizeLoadedProfile(player, savedProfile)
 	local profile = createDefaultProfile(player)
 
@@ -372,27 +432,12 @@ local function normalizeLoadedProfile(player, savedProfile)
 	applyNumber(profile, savedProfile, "Metal")
 	applyNumber(profile, savedProfile, "MetalIngot")
 	applyNumber(profile, savedProfile, "MetalParts")
-	applyNumber(profile, savedProfile, "HouseLevel")
-	applyNumber(profile, savedProfile, "StorageLevel")
 	applyNumber(profile, savedProfile, "ToolKitLevel")
-	applyNumber(profile, savedProfile, "ForgeLevel")
+
+	profile.Buildings = migrateBuildingsFromSavedProfile(savedProfile)
 
 	if type(savedProfile.PlotUnlocked) == "boolean" then
 		profile.PlotUnlocked = savedProfile.PlotUnlocked
-	end
-
-	if type(savedProfile.StorageBuilt) == "boolean" then
-		profile.StorageBuilt = savedProfile.StorageBuilt
-	end
-
-	if profile.StorageBuilt and (profile.StorageLevel or 0) < 1 then
-		profile.StorageLevel = 1
-	elseif (profile.StorageLevel or 0) >= 1 then
-		profile.StorageBuilt = true
-	end
-
-	if type(savedProfile.WorkshopBuilt) == "boolean" then
-		profile.WorkshopBuilt = savedProfile.WorkshopBuilt
 	end
 
 	if type(savedProfile.ForestUnlocked) == "boolean" then
@@ -431,13 +476,9 @@ local function createSaveData(profile)
 		Metal = profile.Metal,
 		MetalIngot = profile.MetalIngot,
 		MetalParts = profile.MetalParts,
-		HouseLevel = profile.HouseLevel,
+		Buildings = copyTable(profile.Buildings),
 		PlotUnlocked = profile.PlotUnlocked,
-		StorageBuilt = profile.StorageBuilt,
-		StorageLevel = profile.StorageLevel,
-		WorkshopBuilt = profile.WorkshopBuilt,
 		ToolKitLevel = profile.ToolKitLevel,
-		ForgeLevel = profile.ForgeLevel,
 		ForestUnlocked = profile.ForestUnlocked,
 		RockZoneUnlocked = profile.RockZoneUnlocked,
 		ForestZoneState = profile.ForestZoneState,
@@ -514,6 +555,44 @@ function PlayerDataService.GetProfile(player)
 	return profiles[player.UserId]
 end
 
+function PlayerDataService.GetBuildingLevel(profile, buildingId)
+	if type(profile) ~= "table" or type(buildingId) ~= "string" then
+		return 0
+	end
+
+	local buildings = profile.Buildings
+
+	if type(buildings) ~= "table" then
+		buildings = createDefaultBuildings()
+		profile.Buildings = buildings
+	end
+
+	local building = buildings[buildingId]
+
+	if type(building) ~= "table" then
+		return 0
+	end
+
+	return normalizeBuildingLevel(building.Level, 0)
+end
+
+function PlayerDataService.SetBuildingLevel(profile, buildingId, level)
+	if type(profile) ~= "table" or type(buildingId) ~= "string" then
+		return false
+	end
+
+	local buildings = profile.Buildings
+
+	if type(buildings) ~= "table" then
+		buildings = createDefaultBuildings()
+		profile.Buildings = buildings
+	end
+
+	buildings[buildingId] = buildings[buildingId] or {}
+	buildings[buildingId].Level = normalizeBuildingLevel(level, 0)
+	return true
+end
+
 function PlayerDataService.MarkDirty(player)
 	local profile = PlayerDataService.GetProfile(player)
 
@@ -538,6 +617,11 @@ function PlayerDataService.GetPublicProfile(player)
 		return nil
 	end
 
+	local houseLevel = PlayerDataService.GetBuildingLevel(profile, "House")
+	local storageLevel = PlayerDataService.GetBuildingLevel(profile, "Storage")
+	local workshopLevel = PlayerDataService.GetBuildingLevel(profile, "Workshop")
+	local forgeLevel = PlayerDataService.GetBuildingLevel(profile, "Forge")
+
 	return {
 		Gold = profile.Gold,
 		Wood = profile.Wood,
@@ -545,13 +629,14 @@ function PlayerDataService.GetPublicProfile(player)
 		Metal = profile.Metal,
 		MetalIngot = profile.MetalIngot,
 		MetalParts = profile.MetalParts,
-		HouseLevel = profile.HouseLevel,
+		Buildings = copyTable(profile.Buildings),
+		HouseLevel = houseLevel,
 		PlotUnlocked = profile.PlotUnlocked,
-		StorageBuilt = profile.StorageBuilt,
-		StorageLevel = profile.StorageLevel,
-		WorkshopBuilt = profile.WorkshopBuilt,
+		StorageBuilt = storageLevel >= 1,
+		StorageLevel = storageLevel,
+		WorkshopBuilt = workshopLevel >= 1,
 		ToolKitLevel = profile.ToolKitLevel,
-		ForgeLevel = profile.ForgeLevel,
+		ForgeLevel = forgeLevel,
 		ForestUnlocked = profile.ForestUnlocked,
 		RockZoneUnlocked = profile.RockZoneUnlocked,
 		ForestZoneState = profile.ForestZoneState,
@@ -569,7 +654,7 @@ function PlayerDataService.SendProfileUpdate(player)
 
 	getRemoteEvent("PlayerStatsUpdateEvent"):FireClient(player, publicProfile)
 	print(string.format(
-		"[PlayerDataService] Sent stats update: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d HouseLevel=%d StorageLevel=%d ToolKitLevel=%d ForgeLevel=%d",
+		"[PlayerDataService] Sent stats update: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d House=%d Storage=%d ToolKitLevel=%d Forge=%d",
 		publicProfile.Gold,
 		publicProfile.Wood,
 		publicProfile.Stone,
