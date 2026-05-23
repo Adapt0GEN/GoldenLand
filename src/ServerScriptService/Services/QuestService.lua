@@ -13,12 +13,27 @@ QuestService.Quests = {
 		Id = "first_steps",
 		Name = "Первые шаги",
 		ObjectiveText = "Собери дерево",
+		PrimaryObjectiveId = "wood_collected",
 		RewardGold = 25,
 		RewardWood = 5,
 		RewardStone = 3,
 		Objectives = {
 			wood_collected = {
 				TargetAmount = 3,
+			},
+		},
+	},
+	build_storage = {
+		Id = "build_storage",
+		Name = "Первый склад",
+		ObjectiveText = "Построй склад",
+		PrimaryObjectiveId = "storage_built",
+		RewardGold = 0,
+		RewardWood = 0,
+		RewardStone = 0,
+		Objectives = {
+			storage_built = {
+				TargetAmount = 1,
 			},
 		},
 	},
@@ -72,6 +87,18 @@ local function getObjectiveTarget(quest, objectiveId)
 	return objective.TargetAmount
 end
 
+local function getPrimaryObjectiveId(quest)
+	if quest.PrimaryObjectiveId then
+		return quest.PrimaryObjectiveId
+	end
+
+	for objectiveId in pairs(quest.Objectives or {}) do
+		return objectiveId
+	end
+
+	return nil
+end
+
 local function getQuestStatus(player, questId, objectiveId)
 	if QuestService.IsQuestReadyToComplete(player, questId) then
 		return "ready"
@@ -121,14 +148,19 @@ function QuestService.StartQuest(player, questId)
 
 	local questProgress = ensureQuestProgress(profile, questId)
 
-	-- Первый квест начинается с нулевого прогресса сбора дерева.
-	if questId == "first_steps" then
-		questProgress.wood_collected = 0
+	for objectiveId in pairs(quest.Objectives or {}) do
+		questProgress[objectiveId] = questProgress[objectiveId] or 0
 	end
 
 	profile.CurrentQuestId = questId
+	PlayerDataService.MarkDirty(player)
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player)
+	end
+
 	print(string.format("[QuestService] %s started quest '%s'.", player.Name, quest.Name))
-	sendQuestUpdate(player, questId, "wood_collected", "active")
+	sendQuestUpdate(player, questId, getPrimaryObjectiveId(quest), "active")
 
 	return true
 end
@@ -236,15 +268,16 @@ function QuestService.CompleteQuest(player, questId)
 	end
 
 	if not QuestService.IsQuestReadyToComplete(player, questId) then
-		local woodProgress = QuestService.GetQuestProgress(player, questId, "wood_collected")
-		local woodTarget = getObjectiveTarget(quest, "wood_collected") or 0
+		local objectiveId = getPrimaryObjectiveId(quest)
+		local objectiveProgress = QuestService.GetQuestProgress(player, questId, objectiveId)
+		local objectiveTarget = getObjectiveTarget(quest, objectiveId) or 0
 
 		warn(string.format(
-			"[QuestService] %s cannot complete quest '%s' yet. Wood progress: %d/%d.",
+			"[QuestService] %s cannot complete quest '%s' yet. Progress: %d/%d.",
 			player.Name,
 			quest.Name,
-			woodProgress,
-			woodTarget
+			objectiveProgress,
+			objectiveTarget
 		))
 
 		return false
@@ -256,20 +289,38 @@ function QuestService.CompleteQuest(player, questId)
 		profile.CurrentQuestId = nil
 	end
 
-	CurrencyService.AddGold(player, quest.RewardGold)
-	CurrencyService.AddWood(player, quest.RewardWood)
-	CurrencyService.AddStone(player, quest.RewardStone)
+	local rewardGold = quest.RewardGold or 0
+	local rewardWood = quest.RewardWood or 0
+	local rewardStone = quest.RewardStone or 0
+
+	if rewardGold > 0 then
+		CurrencyService.AddGold(player, rewardGold)
+	end
+
+	if rewardWood > 0 then
+		CurrencyService.AddWood(player, rewardWood)
+	end
+
+	if rewardStone > 0 then
+		CurrencyService.AddStone(player, rewardStone)
+	end
+
+	PlayerDataService.MarkDirty(player)
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player)
+	end
 
 	print(string.format(
 		"[QuestService] %s completed quest '%s' and received %d Gold, %d Wood, %d Stone.",
 		player.Name,
 		quest.Name,
-		quest.RewardGold,
-		quest.RewardWood,
-		quest.RewardStone
+		rewardGold,
+		rewardWood,
+		rewardStone
 	))
 
-	sendQuestUpdate(player, questId, "wood_collected", "completed")
+	sendQuestUpdate(player, questId, getPrimaryObjectiveId(quest), "completed")
 
 	return true
 end

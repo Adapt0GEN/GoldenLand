@@ -13,6 +13,7 @@ local ELDER_NAME = "VillageElder"
 local ELDER_POSITION = Vector3.new(12, 3, 0)
 local QUEST_ID = "first_steps"
 local OBJECTIVE_ID = "wood_collected"
+local STORAGE_QUEST_ID = "build_storage"
 
 local function createPart(name, size, position, color, parent)
 	local part = Instance.new("Part")
@@ -137,8 +138,37 @@ local function giveLandReward(player, profile)
 	print(string.format("[NPCService] %s получил землю и дом уровня %d.", player.Name, profile.HouseLevel))
 end
 
+local function startStorageQuestIfReady(player, profile)
+	if not profile.CompletedQuests[QUEST_ID] then
+		return false
+	end
+
+	if profile.CompletedQuests[STORAGE_QUEST_ID] or profile.StorageBuilt == true then
+		return false
+	end
+
+	if profile.CurrentQuestId and profile.CurrentQuestId ~= STORAGE_QUEST_ID then
+		return false
+	end
+
+	if profile.PlotUnlocked ~= true or (profile.HouseLevel or 0) < 1 then
+		return false
+	end
+
+	if profile.CurrentQuestId == STORAGE_QUEST_ID then
+		return true
+	end
+
+	return QuestService.StartQuest(player, STORAGE_QUEST_ID)
+end
+
 local function handleFirstStepsQuest(player, profile)
 	if profile.CompletedQuests[QUEST_ID] then
+		if startStorageQuestIfReady(player, profile) then
+			print(string.format("[NPCService] %s, new quest: build storage.", player.Name))
+			return
+		end
+
 		print(string.format("[NPCService] %s, земля уже выдана.", player.Name))
 		return
 	end
@@ -166,6 +196,7 @@ local function handleFirstStepsQuest(player, profile)
 
 	if QuestService.CompleteQuest(player, QUEST_ID) then
 		giveLandReward(player, profile)
+		startStorageQuestIfReady(player, profile)
 	end
 end
 

@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local PlayerDataService = require(script.Parent.PlayerDataService)
 local CurrencyService = require(script.Parent.CurrencyService)
+local QuestService = require(script.Parent.QuestService)
 
 local PlotService = {}
 
@@ -12,6 +13,8 @@ local PLOT_POSITION = Vector3.new(0, 0, 80)
 local PLOT_SIZE = Vector3.new(40, 1, 40)
 local MAX_HOUSE_LEVEL = 3
 local MAX_STORAGE_LEVEL = 2
+local STORAGE_QUEST_ID = "build_storage"
+local STORAGE_OBJECTIVE_ID = "storage_built"
 local STORAGE_POSITION = PLOT_POSITION + Vector3.new(-12, 0, 14)
 local WORKSHOP_POSITION = PLOT_POSITION + Vector3.new(13, 0.8, 11)
 local FORGE_POSITION = PLOT_POSITION + Vector3.new(13, 0.8, -11)
@@ -1546,6 +1549,11 @@ function PlotService.TryBuildStorage(player)
 
 	if PlayerDataService.SendProfileUpdate then
 		PlayerDataService.SendProfileUpdate(player)
+	end
+
+	if profile.CurrentQuestId == STORAGE_QUEST_ID and not profile.CompletedQuests[STORAGE_QUEST_ID] then
+		QuestService.AddQuestProgress(player, STORAGE_QUEST_ID, STORAGE_OBJECTIVE_ID, 1)
+		QuestService.CompleteQuest(player, STORAGE_QUEST_ID)
 	end
 
 	if PlayerDataService.SaveProfile then
