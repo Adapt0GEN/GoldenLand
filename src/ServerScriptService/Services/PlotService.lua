@@ -1282,35 +1282,35 @@ local function createForge(player, plotModel, plotBase)
 
 	local forgeCenterCFrame = forgePlotCFrame(plotBase, Vector3.new(0, 0.75, 0))
 
-	local base = createPart("ForgeBase", Vector3.new(10, 1.5, 8), Vector3.new(), Color3.fromRGB(85, 80, 75), forge)
+	local base = createPart("ForgeBase", Vector3.new(10, 1.5, 8), forgeCenterCFrame, Color3.fromRGB(85, 80, 75), forge)
 	base.Material = Enum.Material.Slate
 	base.CFrame = forgeCenterCFrame
 
-	local hearth = createPart("ForgeHearth", Vector3.new(5.5, 0.2, 4.5), Vector3.new(), Color3.fromRGB(55, 50, 48), forge)
+	local hearth = createPart("ForgeHearth", Vector3.new(5.5, 0.2, 4.5), forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + (0.2 / 2), 0), Color3.fromRGB(55, 50, 48), forge)
 	hearth.Material = Enum.Material.Slate
 	hearth.CFrame = forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + (0.2 / 2), 0)
 
-	local firebox = createPart("ForgeFirebox", Vector3.new(5.1, 0.2, 4.1), Vector3.new(), Color3.fromRGB(210, 95, 40), forge)
+	local firebox = createPart("ForgeFirebox", Vector3.new(5.1, 0.2, 4.1), forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + 0.2 + (0.2 / 2), 0), Color3.fromRGB(210, 95, 40), forge)
 	firebox.Material = Enum.Material.Neon
 	firebox.CFrame = forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + 0.2 + (0.2 / 2), 0)
 
-	local backWall = createPart("ForgeBackWall", Vector3.new(5.5, 5, 1), Vector3.new(), Color3.fromRGB(55, 50, 48), forge)
+	local backWall = createPart("ForgeBackWall", Vector3.new(5.5, 5, 1), forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + (5 / 2), 1.75), Color3.fromRGB(55, 50, 48), forge)
 	backWall.Material = Enum.Material.Slate
 	backWall.CFrame = forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + (5 / 2), 1.75)
 
-	local hood = createPart("ForgeHood", Vector3.new(5.5, 1.5, 1), Vector3.new(), Color3.fromRGB(55, 50, 48), forge)
+	local hood = createPart("ForgeHood", Vector3.new(5.5, 1.5, 1), forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + 5 - (1.5 / 2), -1.75), Color3.fromRGB(55, 50, 48), forge)
 	hood.Material = Enum.Material.Slate
 	hood.CFrame = forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + 5 - (1.5 / 2), -1.75)
 
-	local chimney = createPart("ForgeChimney", Vector3.new(2, 6, 2), Vector3.new(), Color3.fromRGB(45, 45, 45), forge)
+	local chimney = createPart("ForgeChimney", Vector3.new(2, 6, 2), forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + 5 + (6 / 2), 0), Color3.fromRGB(45, 45, 45), forge)
 	chimney.Material = Enum.Material.Brick
 	chimney.CFrame = forgeCenterCFrame * CFrame.new(-1.5, (1.5 / 2) + 5 + (6 / 2), 0)
 
-	local anvil = createPart("ForgeAnvil", Vector3.new(2.5, 1, 1.5), Vector3.new(), Color3.fromRGB(70, 75, 80), forge)
+	local anvil = createPart("ForgeAnvil", Vector3.new(2.5, 1, 1.5), forgeCenterCFrame * CFrame.new(3.2, -(1.5 / 2) + (1 / 2), 1.7), Color3.fromRGB(70, 75, 80), forge)
 	anvil.Material = Enum.Material.Metal
 	anvil.CFrame = forgeCenterCFrame * CFrame.new(3.2, -(1.5 / 2) + (1 / 2), 1.7)
 
-	local sign = createPart("ForgeSignBoard", Vector3.new(5, 1.4, 0.35), Vector3.new(), Color3.fromRGB(230, 195, 115), forge)
+	local sign = createPart("ForgeSignBoard", Vector3.new(5, 1.4, 0.35), forgeCenterCFrame * CFrame.new(0, 2.45, -4.2), Color3.fromRGB(230, 195, 115), forge)
 	sign.CFrame = forgeCenterCFrame * CFrame.new(0, 2.45, -4.2)
 
 	local surfaceGui = Instance.new("SurfaceGui")
