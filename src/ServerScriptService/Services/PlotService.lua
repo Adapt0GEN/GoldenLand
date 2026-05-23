@@ -1555,6 +1555,27 @@ local function updateHouseVisual(player, houseLevel)
 	return true
 end
 
+local function removeRestoredBuildingVisuals(plotModel)
+	local visualNames = {
+		"StorageBuilding",
+		"StorageBuildSpot",
+		"WorkshopBuilding",
+		"WorkshopBuildSpot",
+		"WorkshopBuildSign",
+		"Forge",
+		"ForgeBuildSite",
+		"ForgeBuildSign",
+	}
+
+	for _, visualName in ipairs(visualNames) do
+		local visual = plotModel:FindFirstChild(visualName)
+
+		if visual then
+			visual:Destroy()
+		end
+	end
+end
+
 function PlotService.UnlockPlot(player)
 	local profile = PlayerDataService.GetProfile(player)
 
@@ -1581,6 +1602,8 @@ local function restorePlotBuildingVisuals(player, plotModel, profile)
 		warn(string.format("[PlotService] Plot base not found while restoring buildings for %s.", player.Name))
 		return
 	end
+
+	removeRestoredBuildingVisuals(plotModel)
 
 	local houseLevel = PlayerDataService.GetBuildingLevel(profile, "House")
 	local storageLevel = PlayerDataService.GetBuildingLevel(profile, "Storage")
