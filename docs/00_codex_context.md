@@ -5,6 +5,8 @@ GoldenLand / "Золотая земля" is a Roblox/Rojo single-player RPG/surv
 
 The player starts as a survivor on a small personal plot, manually gathers resources, builds early structures, unlocks new zones, and later develops a camp/town with production chains and automation.
 
+Current MVP layout uses a compact single-player test island: the personal plot is intentionally created near the start world so the elder, starter resources, ForestZone, RockZone, house, storage, workshop, and forge are visible or quickly reachable. Large multiplayer plot grids are deferred.
+
 ## Workflow
 - Roblox Studio + VS Code + Rojo.
 - Edit code only in src/.
@@ -55,7 +57,4 @@ Do not jump to combat, classes, backpack, food/fatigue, pets, raids, or automati
 - All resource changes must happen on the server.
 - Do not make broad refactors.
 - Do not change unrelated systems.
-- Check for Git conflict markers before finishing:
-  <<<<<<<
-  =======
-  >>>>>>>
+- Check for Git conflict markers before finishing.
