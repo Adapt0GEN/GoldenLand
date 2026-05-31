@@ -854,7 +854,33 @@ function ResourceService.CreateResourceNodes()
 	return resourceNodes
 end
 
-function ResourceService.CreateForestZoneResources(forestZone, forestUnlocked)
+-- Считаем лесной объект очищенным, если он помечен в ForestZoneClearedObjects
+-- или его состояние в профиле уже Empty / без оставшихся действий.
+local function isForestObjectCleared(profile, objectId)
+	if type(profile) ~= "table" then
+		return false
+	end
+
+	local clearedObjects = profile.ForestZoneClearedObjects
+
+	if type(clearedObjects) == "table" and clearedObjects[objectId] == true then
+		return true
+	end
+
+	local forestZone = profile.ResourceZones and profile.ResourceZones[FOREST_AREA_ID]
+	local objects = if type(forestZone) == "table" then forestZone.Objects else nil
+	local resourceObject = if type(objects) == "table" then objects[objectId] else nil
+
+	if type(resourceObject) == "table"
+		and (resourceObject.State == "Empty" or (resourceObject.RemainingActions or 0) <= 0)
+	then
+		return true
+	end
+
+	return false
+end
+
+function ResourceService.CreateForestZoneResources(forestZone, forestUnlocked, profile)
 	if forestUnlocked ~= true then
 		return nil
 	end
@@ -872,10 +898,10 @@ function ResourceService.CreateForestZoneResources(forestZone, forestUnlocked)
 		forestResources.Parent = forestZone
 	end
 
+	-- Чистим только декоративные деревья. Лесные камни обрабатываются ниже
+	-- по их фактическому состоянию, чтобы очищенные камни не возвращались.
 	for _, oldForestTree in ipairs(forestResources:GetChildren()) do
 		if string.match(oldForestTree.Name, "^ForestTree_%d+$") then
-			oldForestTree:Destroy()
-		elseif string.match(oldForestTree.Name, "^ForestStone_%d$") then
 			oldForestTree:Destroy()
 		end
 	end
@@ -886,8 +912,14 @@ function ResourceService.CreateForestZoneResources(forestZone, forestUnlocked)
 
 	for index, position in ipairs(FOREST_STONE_POSITIONS) do
 		local stoneName = FOREST_STONE_OBJECT_IDS[index]
+		local existingStone = forestResources:FindFirstChild(stoneName)
 
-		if not forestResources:FindFirstChild(stoneName) then
+		if isForestObjectCleared(profile, stoneName) then
+			-- Очищенный лесной камень не должен возвращаться, в том числе в Empty-зоне.
+			if existingStone then
+				existingStone:Destroy()
+			end
+		elseif not existingStone then
 			createForestStone(index, position, forestResources)
 		end
 	end

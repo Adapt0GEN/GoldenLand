@@ -2,6 +2,31 @@
 
 ---
 
+# 2026-05-31 — Фаза 0: фундамент и фикс ForestZone Empty
+
+Подключён новый ведущий ассистент (Claude). Зафиксированы оценка проекта и
+пошаговый мастер-план в `16_assessment_and_master_plan.md`.
+
+Сделано в коде:
+
+```text
+- инструменты качества: stylua + selene в aftman.toml, конфиги stylua.toml/selene.toml
+- PlayerDataService: SchemaVersion профиля + каркас миграций migrateSavedProfile
+- PlayerDataService: createDefaultResourceZones теперь использует deepCopy
+- Constants: MvpVersion 0.4, StartingQuestId = first_steps
+- ФИКС ForestZone Empty: исправлен регэксп очистки (ForestStone_01/02 не совпадали),
+  CreateForestZoneResources теперь учитывает per-object состояние и не возвращает
+  очищенные камни в Empty-зону
+```
+
+Требует проверки в Roblox Studio: визуальная очистка ForestZone в Empty
+(окружение без Studio, синтаксис проверен вручную).
+
+Стратегические решения: карта — гибрид (.rbxl + код), мультиплеер — несколько
+Places + TeleportService (план Фазы 3).
+
+---
+
 # 2026-05-20 — Полная актуализация planning
 
 Добавлено и объединено:

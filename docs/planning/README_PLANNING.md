@@ -41,16 +41,17 @@ C:\Users\tim90\Documents\GoldenLand\docs\planning
 ## Актуальный фокус
 
 ```text
-MVP 0.2.6-fix — добить визуальную очистку ForestZone в Empty.
+Фаза 0 (фундамент) — выполнена в коде, требует проверки в Roblox Studio.
+Далее — Фаза 1: игровой «крючок» (захват земли у враждебных NPC).
 ```
 
-После теста было видно:
+Полный план: `16_assessment_and_master_plan.md`.
+
+Фикс ForestZone Empty (бывший MVP 0.2.6-fix) сделан 2026-05-31:
 
 ```text
-ForestZoneState стал Empty
-Empty-визуал создаётся
-но зона визуально очищается не полностью
-ResourceService всё ещё создаёт ForestZone resources
+причина: регэксп очистки ^ForestStone_%d$ не совпадал с ID ForestStone_01/02,
+поэтому очищенные камни не удалялись и пересоздавались при refresh.
+исправление: учёт per-object состояния в CreateForestZoneResources.
+осталось: подтвердить визуальную очистку Empty в Roblox Studio.
 ```
-
-Поэтому текущая ближайшая задача — фикс конфликта WorldService и ResourceService в ForestZone.

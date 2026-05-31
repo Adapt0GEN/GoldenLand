@@ -3,9 +3,9 @@
 
 local Constants = {
 	GameName = "Златоземье: Своя Земля",
-	MvpVersion = "0.1",
+	MvpVersion = "0.4",
 	MaxHouseLevel = 3,
-	StartingQuestId = "talk_to_elder",
+	StartingQuestId = "first_steps",
 }
 
 return Constants

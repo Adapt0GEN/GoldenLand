@@ -14,6 +14,9 @@ local profileSaveStateByUserId = {}
 local PROFILE_STORE_NAME = "GoldenLandPlayerProfiles_v1"
 local profileStore = nil
 local SAVE_THROTTLE_SECONDS = 10
+-- Версия схемы профиля. Повышается при несовместимых изменениях структуры данных,
+-- чтобы старые сейвы можно было безопасно мигрировать в migrateSavedProfile.
+local CURRENT_SCHEMA_VERSION = 1
 local DEFAULT_RESOURCE_ZONES = {
 	ForestArea_01 = {
 		Type = "ForestArea",
@@ -45,6 +48,26 @@ local DEFAULT_RESOURCE_ZONES = {
 	},
 }
 
+-- Глубокая копия таблицы. Используется для дефолтных данных и save/публичных снимков,
+-- чтобы изменения профиля не затрагивали общие шаблоны.
+local function copyTable(source)
+	local result = {}
+
+	if type(source) ~= "table" then
+		return result
+	end
+
+	for key, value in pairs(source) do
+		if type(value) == "table" then
+			result[key] = copyTable(value)
+		else
+			result[key] = value
+		end
+	end
+
+	return result
+end
+
 local function createDefaultBuildings()
 	return {
 		House = { Level = 1 },
@@ -55,36 +78,7 @@ local function createDefaultBuildings()
 end
 
 local function createDefaultResourceZones()
-	return {
-		ForestArea_01 = {
-			Type = DEFAULT_RESOURCE_ZONES.ForestArea_01.Type,
-			State = DEFAULT_RESOURCE_ZONES.ForestArea_01.State,
-			RemainingActions = DEFAULT_RESOURCE_ZONES.ForestArea_01.RemainingActions,
-			Objects = {
-				ForestTreeCluster = {
-					Type = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestTreeCluster.Type,
-					State = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestTreeCluster.State,
-					Resource = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestTreeCluster.Resource,
-					RemainingActions = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestTreeCluster.RemainingActions,
-					AmountPerAction = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestTreeCluster.AmountPerAction,
-				},
-				ForestStone_01 = {
-					Type = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_01.Type,
-					State = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_01.State,
-					Resource = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_01.Resource,
-					RemainingActions = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_01.RemainingActions,
-					AmountPerAction = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_01.AmountPerAction,
-				},
-				ForestStone_02 = {
-					Type = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_02.Type,
-					State = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_02.State,
-					Resource = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_02.Resource,
-					RemainingActions = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_02.RemainingActions,
-					AmountPerAction = DEFAULT_RESOURCE_ZONES.ForestArea_01.Objects.ForestStone_02.AmountPerAction,
-				},
-			},
-		},
-	}
+	return copyTable(DEFAULT_RESOURCE_ZONES)
 end
 
 local function getRemoteEvent(eventName)
@@ -110,6 +104,7 @@ end
 local function createDefaultProfile(player)
 	return {
 		UserId = player.UserId,
+		SchemaVersion = CURRENT_SCHEMA_VERSION,
 		Gold = 0,
 		Wood = 0,
 		Stone = 0,
@@ -200,24 +195,6 @@ local function getProfileStore()
 
 	profileStore = result
 	return profileStore
-end
-
-local function copyTable(source)
-	local result = {}
-
-	if type(source) ~= "table" then
-		return result
-	end
-
-	for key, value in pairs(source) do
-		if type(value) == "table" then
-			result[key] = copyTable(value)
-		else
-			result[key] = value
-		end
-	end
-
-	return result
 end
 
 local function applyNumber(profile, savedProfile, fieldName)
@@ -418,12 +395,42 @@ local function migrateBuildingsFromSavedProfile(savedProfile)
 	return buildings
 end
 
+-- Каркас миграций сейвов: последовательно приводит сырой профиль к текущей версии схемы.
+-- normalizeLoadedProfile уже умеет читать легаси-поля (HouseLevel, StorageBuilt,
+-- ResourceAreas и т.д.), поэтому версия 1 не требует трансформаций. Новые
+-- несовместимые изменения данных добавляются сюда как шаги [N] = function(saved) ... end.
+local PROFILE_MIGRATIONS = {}
+
+local function migrateSavedProfile(savedProfile)
+	if type(savedProfile) ~= "table" then
+		return savedProfile
+	end
+
+	local version = if type(savedProfile.SchemaVersion) == "number" then savedProfile.SchemaVersion else 0
+
+	while version < CURRENT_SCHEMA_VERSION do
+		local nextVersion = version + 1
+		local migrate = PROFILE_MIGRATIONS[nextVersion]
+
+		if migrate then
+			migrate(savedProfile)
+		end
+
+		version = nextVersion
+		savedProfile.SchemaVersion = version
+	end
+
+	return savedProfile
+end
+
 local function normalizeLoadedProfile(player, savedProfile)
 	local profile = createDefaultProfile(player)
 
 	if type(savedProfile) ~= "table" then
 		return profile
 	end
+
+	savedProfile = migrateSavedProfile(savedProfile)
 
 	-- Сохраняем только ожидаемые поля, чтобы старые или повреждённые данные не ломали профиль.
 	applyNumber(profile, savedProfile, "Gold")
@@ -470,6 +477,7 @@ end
 local function createSaveData(profile)
 	return {
 		UserId = profile.UserId,
+		SchemaVersion = profile.SchemaVersion or CURRENT_SCHEMA_VERSION,
 		Gold = profile.Gold,
 		Wood = profile.Wood,
 		Stone = profile.Stone,

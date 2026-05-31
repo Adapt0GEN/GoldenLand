@@ -5,3 +5,8 @@
 [tools]
 rojo = "rojo-rbx/rojo@7.7.0-rc.1"
 # rojo = "rojo-rbx/rojo@6.2.0"
+
+# Инструменты качества кода. Запускаются локально: `stylua src` и `selene src`.
+# Версии можно поднимать по мере выхода новых релизов.
+stylua = "JohnnyMorganz/StyLua@0.20.0"
+selene = "Kampfkarren/selene@0.27.1"

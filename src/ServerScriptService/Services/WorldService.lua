@@ -916,7 +916,7 @@ function WorldService.TryClearForestPath(player)
 		profile.ForestZoneState = getForestZoneState(profile)
 		print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, profile.ForestZoneState))
 		removeBlockedPath()
-		ResourceService.CreateForestZoneResources(createForestZone(profile.ForestZoneState), true)
+		ResourceService.CreateForestZoneResources(createForestZone(profile.ForestZoneState), true, profile)
 		WorldService.UpdateForestAreaVisual(player)
 		return true
 	end
@@ -933,7 +933,7 @@ function WorldService.TryClearForestPath(player)
 	PlayerDataService.MarkDirty(player)
 	removeBlockedPath()
 	print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, profile.ForestZoneState))
-	ResourceService.CreateForestZoneResources(createForestZone(profile.ForestZoneState), true)
+	ResourceService.CreateForestZoneResources(createForestZone(profile.ForestZoneState), true, profile)
 	WorldService.UpdateForestAreaVisual(player)
 
 	if PlayerDataService.SendProfileUpdate then
@@ -1003,7 +1003,7 @@ function WorldService.UpdateForestAccessForPlayer(player)
 		profile.ForestZoneState = getForestZoneState(profile)
 		print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, profile.ForestZoneState))
 		removeBlockedPath()
-		ResourceService.CreateForestZoneResources(createForestZone(profile.ForestZoneState), true)
+		ResourceService.CreateForestZoneResources(createForestZone(profile.ForestZoneState), true, profile)
 		WorldService.UpdateForestAreaVisual(player)
 	else
 		profile.ForestZoneState = "Locked"
