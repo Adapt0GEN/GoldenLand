@@ -1,19 +1,23 @@
 -- CombatService
--- Шаг 1.1 Фазы 1: меч-Tool + серверный hitbox + враг-манекен с HP.
+-- Фаза 1: бой и враги.
+--   Шаг 1.1: меч-Tool + серверный hitbox + враг-манекен с HP.
+--   Шаг 1.2: враждебный лагерь — кластер врагов + структура лагеря, детект зачистки.
 -- Бой серверный: Tool.Activated обрабатывается на сервере, поэтому урон и попадания
 -- нельзя подделать с клиента. Враги используют собственную систему HP (атрибуты +
 -- самодельная полоска здоровья), без Humanoid — так надёжнее для статичных целей
--- и проще расширять до враждебного лагеря в следующих шагах.
+-- и проще управлять лагерями и захватом.
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CurrencyService = require(script.Parent.CurrencyService)
 
 local CombatService = {}
 
 local ENEMIES_FOLDER_NAME = "Enemies"
+local CAMPS_FOLDER_NAME = "Camps"
 
 -- Оружие.
 local WEAPON_NAME = "Меч"
@@ -29,7 +33,23 @@ local DUMMY_MAX_HEALTH = 100
 local DUMMY_RESPAWN_DELAY = 5
 local DUMMY_GOLD_REWARD = 10
 
+-- Враждебный лагерь.
+local HOSTILE_CAMP = {
+	Id = "BanditCamp_01",
+	DisplayName = "Враждебный лагерь",
+	Center = Vector3.new(64, 3, 16),
+	Enemies = {
+		{ Suffix = "Guard_1", Offset = Vector3.new(-7, 0, -5), MaxHealth = 80, GoldReward = 15 },
+		{ Suffix = "Guard_2", Offset = Vector3.new(7, 0, -6), MaxHealth = 80, GoldReward = 15 },
+		{ Suffix = "Guard_3", Offset = Vector3.new(-5, 0, 7), MaxHealth = 100, GoldReward = 20 },
+		{ Suffix = "Leader", Offset = Vector3.new(6, 0, 6), MaxHealth = 140, GoldReward = 35, Color = Color3.fromRGB(90, 40, 70) },
+	},
+	ClearBonusGold = 40,
+}
+
 local swingCooldownByUserId = {}
+local respawnSpecs = {}
+local campClearedFlags = {}
 local weaponTemplate = nil
 
 local function createPart(name, size, position, color, parent)
@@ -47,12 +67,33 @@ local function createPart(name, size, position, color, parent)
 	return part
 end
 
+local function sendPlayerMessage(player, message)
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	local event = remotes and remotes:FindFirstChild("PlayerMessageEvent")
+
+	if event then
+		event:FireClient(player, message)
+	end
+end
+
 local function getEnemiesFolder()
 	local folder = Workspace:FindFirstChild(ENEMIES_FOLDER_NAME)
 
 	if not folder then
 		folder = Instance.new("Folder")
 		folder.Name = ENEMIES_FOLDER_NAME
+		folder.Parent = Workspace
+	end
+
+	return folder
+end
+
+local function getCampsFolder()
+	local folder = Workspace:FindFirstChild(CAMPS_FOLDER_NAME)
+
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = CAMPS_FOLDER_NAME
 		folder.Parent = Workspace
 	end
 
@@ -87,7 +128,8 @@ end
 local function updateHealthBar(enemyModel)
 	local head = enemyModel:FindFirstChild("Head")
 	local billboard = head and head:FindFirstChild("HealthBar")
-	local fill = billboard and billboard:FindFirstChild("Background") and billboard.Background:FindFirstChild("Fill")
+	local background = billboard and billboard:FindFirstChild("Background")
+	local fill = background and background:FindFirstChild("Fill")
 
 	if not fill then
 		return
@@ -117,65 +159,113 @@ local function playSwingEffect(rootPart)
 	Debris:AddItem(effect, 0.15)
 end
 
-local function spawnTrainingDummy()
+-- Универсальное создание врага. params:
+--   Name, Position, MaxHealth, GoldReward, Color?, CampId?, Respawns?, RespawnDelay?
+local function createEnemy(params)
 	local folder = getEnemiesFolder()
 
-	if folder:FindFirstChild(TRAINING_DUMMY_NAME) then
-		return folder[TRAINING_DUMMY_NAME]
+	if folder:FindFirstChild(params.Name) then
+		return folder[params.Name]
 	end
 
+	local color = params.Color or Color3.fromRGB(120, 60, 60)
+
 	local model = Instance.new("Model")
-	model.Name = TRAINING_DUMMY_NAME
+	model.Name = params.Name
 
-	local body = createPart(
-		"Body",
-		Vector3.new(2.4, 4, 1.6),
-		TRAINING_DUMMY_POSITION,
-		Color3.fromRGB(120, 60, 60),
-		model
-	)
+	local body = createPart("Body", Vector3.new(2.4, 4, 1.6), params.Position, color, model)
 
-	local head = createPart(
+	createPart(
 		"Head",
 		Vector3.new(1.6, 1.6, 1.6),
-		TRAINING_DUMMY_POSITION + Vector3.new(0, 2.8, 0),
-		Color3.fromRGB(150, 95, 95),
+		params.Position + Vector3.new(0, 2.8, 0),
+		color:Lerp(Color3.fromRGB(255, 255, 255), 0.25),
 		model
 	)
 
 	model.PrimaryPart = body
 	model:SetAttribute("IsEnemy", true)
-	model:SetAttribute("MaxHealth", DUMMY_MAX_HEALTH)
-	model:SetAttribute("Health", DUMMY_MAX_HEALTH)
-	model:SetAttribute("GoldReward", DUMMY_GOLD_REWARD)
+	model:SetAttribute("MaxHealth", params.MaxHealth)
+	model:SetAttribute("Health", params.MaxHealth)
+	model:SetAttribute("GoldReward", params.GoldReward or 0)
 
-	createHealthBar(head)
+	if params.CampId then
+		model:SetAttribute("CampId", params.CampId)
+	end
+
+	if params.Respawns then
+		model:SetAttribute("Respawns", true)
+		respawnSpecs[params.Name] = params
+	end
+
+	createHealthBar(model:FindFirstChild("Head"))
 	model.Parent = folder
 
-	print("[CombatService] Training dummy spawned.")
 	return model
+end
+
+local function spawnTrainingDummy()
+	return createEnemy({
+		Name = TRAINING_DUMMY_NAME,
+		Position = TRAINING_DUMMY_POSITION,
+		MaxHealth = DUMMY_MAX_HEALTH,
+		GoldReward = DUMMY_GOLD_REWARD,
+		Respawns = true,
+	})
+end
+
+local function isCampCleared(campId)
+	for _, enemyModel in ipairs(getEnemiesFolder():GetChildren()) do
+		if enemyModel:GetAttribute("CampId") == campId and (enemyModel:GetAttribute("Health") or 0) > 0 then
+			return false
+		end
+	end
+
+	return true
+end
+
+local function onCampCleared(campId, attacker)
+	print(string.format("[CombatService] Camp %s cleared.", campId))
+
+	local campModel = getCampsFolder():FindFirstChild(campId)
+
+	if campModel then
+		campModel:SetAttribute("Cleared", true)
+	end
+
+	if attacker then
+		if HOSTILE_CAMP.Id == campId and HOSTILE_CAMP.ClearBonusGold > 0 then
+			CurrencyService.AddGold(attacker, HOSTILE_CAMP.ClearBonusGold)
+		end
+
+		sendPlayerMessage(attacker, "Лагерь зачищен!")
+	end
 end
 
 local function killEnemy(enemyModel)
 	local attackerUserId = enemyModel:GetAttribute("LastAttackerUserId")
 	local reward = enemyModel:GetAttribute("GoldReward") or 0
-	local isTrainingDummy = enemyModel.Name == TRAINING_DUMMY_NAME
+	local campId = enemyModel:GetAttribute("CampId")
+	local respawns = enemyModel:GetAttribute("Respawns")
+	local enemyName = enemyModel.Name
+	local attacker = if attackerUserId then Players:GetPlayerByUserId(attackerUserId) else nil
 
-	if attackerUserId and reward > 0 then
-		local attacker = Players:GetPlayerByUserId(attackerUserId)
-
-		if attacker then
-			CurrencyService.AddGold(attacker, reward)
-			print(string.format("[CombatService] %s defeated %s (+%d Gold).", attacker.Name, enemyModel.Name, reward))
-		end
+	if attacker and reward > 0 then
+		CurrencyService.AddGold(attacker, reward)
+		print(string.format("[CombatService] %s defeated %s (+%d Gold).", attacker.Name, enemyName, reward))
 	end
 
 	enemyModel:Destroy()
 
-	if isTrainingDummy then
+	if respawns and respawnSpecs[enemyName] then
 		task.delay(DUMMY_RESPAWN_DELAY, function()
-			spawnTrainingDummy()
+			createEnemy(respawnSpecs[enemyName])
 		end)
+	end
+
+	if campId and not campClearedFlags[campId] and isCampCleared(campId) then
+		campClearedFlags[campId] = true
+		onCampCleared(campId, attacker)
 	end
 end
 
@@ -235,6 +325,97 @@ local function onSwing(player)
 			end
 		end
 	end
+end
+
+-- Простой текстовый знак (доска + SurfaceGui), без внешних ассетов.
+local function createTextSign(name, text, position, parent)
+	local board = createPart("SignBoard", Vector3.new(6, 1.6, 0.3), position, Color3.fromRGB(60, 45, 35), parent)
+	board.Name = name
+
+	local surfaceGui = Instance.new("SurfaceGui")
+	surfaceGui.Name = "TextSurface"
+	surfaceGui.Face = Enum.NormalId.Front
+	surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	surfaceGui.PixelsPerStud = 50
+	surfaceGui.Parent = board
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextScaled = true
+	label.Font = Enum.Font.SourceSansBold
+	label.TextColor3 = Color3.fromRGB(255, 220, 200)
+	label.Parent = surfaceGui
+
+	return board
+end
+
+local function createCampStructures(camp)
+	local folder = getCampsFolder()
+
+	if folder:FindFirstChild(camp.Id) then
+		return folder[camp.Id]
+	end
+
+	local center = camp.Center
+	local campModel = Instance.new("Model")
+	campModel.Name = camp.Id
+	campModel:SetAttribute("CampId", camp.Id)
+
+	-- Кострище.
+	createPart("Firewood_1", Vector3.new(2.6, 0.5, 0.6), center + Vector3.new(0, -1.2, 0.7), Color3.fromRGB(70, 45, 30), campModel)
+	createPart("Firewood_2", Vector3.new(0.6, 0.5, 2.6), center + Vector3.new(0.7, -1.2, 0), Color3.fromRGB(70, 45, 30), campModel)
+	local flame = createPart("Campfire", Vector3.new(1.4, 1.6, 1.4), center + Vector3.new(0, -0.4, 0), Color3.fromRGB(235, 130, 40), campModel)
+	flame.Material = Enum.Material.Neon
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 150, 60)
+	light.Range = 18
+	light.Brightness = 2
+	light.Parent = flame
+
+	-- Палатки (короб + клиновидная крыша).
+	local function createTent(name, tentCenter)
+		createPart(name .. "_Body", Vector3.new(6, 2.4, 5), tentCenter, Color3.fromRGB(70, 60, 50), campModel)
+
+		local roof = Instance.new("WedgePart")
+		roof.Name = name .. "_Roof"
+		roof.Size = Vector3.new(5, 2, 6)
+		roof.Anchored = true
+		roof.CanCollide = false
+		roof.Color = Color3.fromRGB(90, 35, 35)
+		roof.CFrame = CFrame.new(tentCenter + Vector3.new(0, 2.2, 0)) * CFrame.Angles(0, math.rad(90), 0)
+		roof.Parent = campModel
+	end
+
+	createTent("Tent_1", center + Vector3.new(-14, 0.2, -8))
+	createTent("Tent_2", center + Vector3.new(13, 0.2, -9))
+
+	-- Знамя лагеря.
+	createPart("BannerPole", Vector3.new(0.4, 8, 0.4), center + Vector3.new(0, 2, -12), Color3.fromRGB(60, 45, 30), campModel)
+	createPart("BannerFlag", Vector3.new(0.2, 2.6, 3.4), center + Vector3.new(0, 4.2, -10.3), Color3.fromRGB(120, 30, 40), campModel)
+
+	createTextSign(camp.Id .. "_Sign", camp.DisplayName, center + Vector3.new(0, 1.4, 14), campModel)
+
+	campModel.Parent = folder
+	return campModel
+end
+
+local function spawnHostileCamp(camp)
+	createCampStructures(camp)
+
+	for _, enemyInfo in ipairs(camp.Enemies) do
+		createEnemy({
+			Name = camp.Id .. "_" .. enemyInfo.Suffix,
+			Position = camp.Center + enemyInfo.Offset,
+			MaxHealth = enemyInfo.MaxHealth,
+			GoldReward = enemyInfo.GoldReward,
+			Color = enemyInfo.Color,
+			CampId = camp.Id,
+		})
+	end
+
+	print(string.format("[CombatService] Hostile camp %s spawned.", camp.Id))
 end
 
 local function createWeaponTemplate()
@@ -311,6 +492,7 @@ end
 function CombatService.Start()
 	weaponTemplate = createWeaponTemplate()
 	spawnTrainingDummy()
+	spawnHostileCamp(HOSTILE_CAMP)
 
 	Players.PlayerAdded:Connect(setupPlayer)
 
