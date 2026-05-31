@@ -49,6 +49,15 @@ local HOSTILE_CAMP = {
 		{ Suffix = "Leader", Offset = Vector3.new(6, 0, 6), MaxHealth = 140, GoldReward = 35, Color = Color3.fromRGB(90, 40, 70) },
 	},
 	ClearBonusGold = 40,
+	OutpostOffset = Vector3.new(0, 0, 6),
+}
+
+-- Стоимость постройки аванпоста на захваченной земле.
+local OUTPOST_COST = {
+	Wood = 30,
+	Stone = 30,
+	Metal = 10,
+	Gold = 20,
 }
 
 local swingCooldownByUserId = {}
@@ -298,6 +307,154 @@ local function applyCapturedVisual(camp)
 	end
 end
 
+-- Простой текстовый знак (доска + SurfaceGui), без внешних ассетов.
+local function createTextSign(name, text, position, parent)
+	local board = createPart("SignBoard", Vector3.new(6, 1.6, 0.3), position, Color3.fromRGB(60, 45, 35), parent)
+	board.Name = name
+
+	local surfaceGui = Instance.new("SurfaceGui")
+	surfaceGui.Name = "TextSurface"
+	surfaceGui.Face = Enum.NormalId.Front
+	surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	surfaceGui.PixelsPerStud = 50
+	surfaceGui.Parent = board
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextScaled = true
+	label.Font = Enum.Font.SourceSansBold
+	label.TextColor3 = Color3.fromRGB(255, 220, 200)
+	label.Parent = surfaceGui
+
+	return board
+end
+
+-- Строит аванпост (постройку игрока) на захваченной земле.
+local function buildOutpostStructure(camp)
+	local campModel = getCampsFolder():FindFirstChild(camp.Id)
+
+	if not campModel then
+		return
+	end
+
+	if campModel:FindFirstChild("Outpost") then
+		return campModel.Outpost
+	end
+
+	local spot = camp.Center + camp.OutpostOffset
+	local groundY = getGroundY(spot.X, spot.Z, spot.Y)
+	local base = Vector3.new(spot.X, groundY, spot.Z)
+
+	local outpost = Instance.new("Model")
+	outpost.Name = "Outpost"
+
+	createPart("Platform", Vector3.new(9, 1, 9), base + Vector3.new(0, 0.5, 0), Color3.fromRGB(120, 110, 95), outpost)
+	createPart("Cabin", Vector3.new(6, 4, 6), base + Vector3.new(0, 3, 0), Color3.fromRGB(150, 120, 80), outpost)
+	createPart("Roof", Vector3.new(7, 1, 7), base + Vector3.new(0, 5.5, 0), Color3.fromRGB(90, 70, 50), outpost)
+	createPart("FlagPole", Vector3.new(0.3, 5, 0.3), base + Vector3.new(0, 8, 0), Color3.fromRGB(80, 60, 40), outpost)
+	createPart("Flag", Vector3.new(0.2, 1.6, 2.4), base + Vector3.new(0, 9.2, 1.2), Color3.fromRGB(70, 170, 90), outpost)
+	createTextSign(camp.Id .. "_OutpostSign", "Аванпост", base + Vector3.new(0, 1.6, 6), outpost)
+
+	outpost.Parent = campModel
+	return outpost
+end
+
+local function removeBuildSpot(camp)
+	local campModel = getCampsFolder():FindFirstChild(camp.Id)
+	local marker = campModel and campModel:FindFirstChild("OutpostBuildSpot")
+
+	if marker then
+		marker:Destroy()
+	end
+end
+
+local function onBuildOutpost(player, camp)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return
+	end
+
+	if not (type(profile.CapturedCamps) == "table" and profile.CapturedCamps[camp.Id]) then
+		sendPlayerMessage(player, "Сначала зачисти лагерь")
+		return
+	end
+
+	if type(profile.CampOutposts) == "table" and profile.CampOutposts[camp.Id] then
+		return
+	end
+
+	local ok, message = CurrencyService.SpendResources(player, OUTPOST_COST)
+
+	if not ok then
+		sendPlayerMessage(player, message or "Не хватает ресурсов")
+		return
+	end
+
+	profile.CampOutposts = profile.CampOutposts or {}
+	profile.CampOutposts[camp.Id] = true
+	PlayerDataService.MarkDirty(player)
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player)
+	end
+
+	removeBuildSpot(camp)
+	buildOutpostStructure(camp)
+	sendPlayerMessage(player, "Аванпост построен!")
+	print(string.format("[CombatService] %s built outpost at %s.", player.Name, camp.Id))
+end
+
+-- Маркер с ProximityPrompt для постройки аванпоста на захваченной земле.
+local function buildBuildSpot(camp)
+	local campModel = getCampsFolder():FindFirstChild(camp.Id)
+
+	if not campModel or campModel:FindFirstChild("OutpostBuildSpot") then
+		return
+	end
+
+	local spot = camp.Center + camp.OutpostOffset
+	local groundY = getGroundY(spot.X, spot.Z, spot.Y)
+	local marker = createPart(
+		"OutpostBuildSpot",
+		Vector3.new(5, 0.4, 5),
+		Vector3.new(spot.X, groundY + 0.2, spot.Z),
+		Color3.fromRGB(70, 170, 90),
+		campModel
+	)
+	marker.Material = Enum.Material.Neon
+	marker.Transparency = 0.35
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "BuildOutpostPrompt"
+	prompt.ObjectText = "Захваченная земля"
+	prompt.ActionText = "Построить аванпост"
+	prompt.HoldDuration = 0.6
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = marker
+
+	prompt.Triggered:Connect(function(player)
+		onBuildOutpost(player, camp)
+	end)
+end
+
+-- По профилю игрока: если аванпост построен — ставим постройку; иначе — маркер стройки.
+local function showOutpostForProfile(camp, profile)
+	if not profile then
+		return
+	end
+
+	if type(profile.CampOutposts) == "table" and profile.CampOutposts[camp.Id] then
+		removeBuildSpot(camp)
+		buildOutpostStructure(camp)
+	else
+		buildBuildSpot(camp)
+	end
+end
+
 local function onCampCleared(campId, attacker)
 	print(string.format("[CombatService] Camp %s cleared.", campId))
 
@@ -319,6 +476,8 @@ local function onCampCleared(campId, attacker)
 			if PlayerDataService.SaveProfile then
 				PlayerDataService.SaveProfile(attacker)
 			end
+
+			showOutpostForProfile(HOSTILE_CAMP, profile)
 		end
 
 		sendPlayerMessage(attacker, "Лагерь зачищен! Земля теперь твоя.")
@@ -411,29 +570,6 @@ local function onSwing(player)
 end
 
 -- Простой текстовый знак (доска + SurfaceGui), без внешних ассетов.
-local function createTextSign(name, text, position, parent)
-	local board = createPart("SignBoard", Vector3.new(6, 1.6, 0.3), position, Color3.fromRGB(60, 45, 35), parent)
-	board.Name = name
-
-	local surfaceGui = Instance.new("SurfaceGui")
-	surfaceGui.Name = "TextSurface"
-	surfaceGui.Face = Enum.NormalId.Front
-	surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	surfaceGui.PixelsPerStud = 50
-	surfaceGui.Parent = board
-
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.Text = text
-	label.TextScaled = true
-	label.Font = Enum.Font.SourceSansBold
-	label.TextColor3 = Color3.fromRGB(255, 220, 200)
-	label.Parent = surfaceGui
-
-	return board
-end
-
 local function createCampStructures(camp)
 	local folder = getCampsFolder()
 
@@ -605,6 +741,7 @@ function CombatService.RestoreCampsForPlayer(player)
 		campClearedFlags[HOSTILE_CAMP.Id] = true
 		removeCampEnemies(HOSTILE_CAMP.Id)
 		applyCapturedVisual(HOSTILE_CAMP)
+		showOutpostForProfile(HOSTILE_CAMP, profile)
 		print(string.format("[CombatService] Restored captured camp %s for %s.", HOSTILE_CAMP.Id, player.Name))
 	end
 end
