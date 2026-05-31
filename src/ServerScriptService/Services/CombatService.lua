@@ -28,7 +28,8 @@ local SWING_DAMAGE = 25
 
 -- Тренировочный манекен (первая цель для проверки боя).
 local TRAINING_DUMMY_NAME = "TrainingDummy"
-local TRAINING_DUMMY_POSITION = Vector3.new(0, 3, 34)
+-- Позиция на земле (Y = 0): тело поднимается в createEnemy.
+local TRAINING_DUMMY_POSITION = Vector3.new(0, 0, 34)
 local DUMMY_MAX_HEALTH = 100
 local DUMMY_RESPAWN_DELAY = 5
 local DUMMY_GOLD_REWARD = 10
@@ -37,7 +38,8 @@ local DUMMY_GOLD_REWARD = 10
 local HOSTILE_CAMP = {
 	Id = "BanditCamp_01",
 	DisplayName = "Враждебный лагерь",
-	Center = Vector3.new(64, 3, 16),
+	-- Центр на земле (Y = 0) и далеко от личного участка игрока, чтобы не перекрываться.
+	Center = Vector3.new(0, 0, -95),
 	Enemies = {
 		{ Suffix = "Guard_1", Offset = Vector3.new(-7, 0, -5), MaxHealth = 80, GoldReward = 15 },
 		{ Suffix = "Guard_2", Offset = Vector3.new(7, 0, -6), MaxHealth = 80, GoldReward = 15 },
@@ -173,12 +175,15 @@ local function createEnemy(params)
 	local model = Instance.new("Model")
 	model.Name = params.Name
 
-	local body = createPart("Body", Vector3.new(2.4, 4, 1.6), params.Position, color, model)
+	-- params.Position — точка на земле (под ногами). Поднимаем тело на половину высоты,
+	-- чтобы враг стоял на земле, а не висел в воздухе.
+	local bodyCenter = params.Position + Vector3.new(0, 2, 0)
+	local body = createPart("Body", Vector3.new(2.4, 4, 1.6), bodyCenter, color, model)
 
 	createPart(
 		"Head",
 		Vector3.new(1.6, 1.6, 1.6),
-		params.Position + Vector3.new(0, 2.8, 0),
+		bodyCenter + Vector3.new(0, 2.8, 0),
 		color:Lerp(Color3.fromRGB(255, 255, 255), 0.25),
 		model
 	)
@@ -363,10 +368,10 @@ local function createCampStructures(camp)
 	campModel.Name = camp.Id
 	campModel:SetAttribute("CampId", camp.Id)
 
-	-- Кострище.
-	createPart("Firewood_1", Vector3.new(2.6, 0.5, 0.6), center + Vector3.new(0, -1.2, 0.7), Color3.fromRGB(70, 45, 30), campModel)
-	createPart("Firewood_2", Vector3.new(0.6, 0.5, 2.6), center + Vector3.new(0.7, -1.2, 0), Color3.fromRGB(70, 45, 30), campModel)
-	local flame = createPart("Campfire", Vector3.new(1.4, 1.6, 1.4), center + Vector3.new(0, -0.4, 0), Color3.fromRGB(235, 130, 40), campModel)
+	-- Кострище (center.Y = 0 — уровень земли, детали приподняты на половину высоты).
+	createPart("Firewood_1", Vector3.new(2.6, 0.5, 0.6), center + Vector3.new(0, 0.25, 0.7), Color3.fromRGB(70, 45, 30), campModel)
+	createPart("Firewood_2", Vector3.new(0.6, 0.5, 2.6), center + Vector3.new(0.7, 0.25, 0), Color3.fromRGB(70, 45, 30), campModel)
+	local flame = createPart("Campfire", Vector3.new(1.4, 1.6, 1.4), center + Vector3.new(0, 0.8, 0), Color3.fromRGB(235, 130, 40), campModel)
 	flame.Material = Enum.Material.Neon
 	local light = Instance.new("PointLight")
 	light.Color = Color3.fromRGB(255, 150, 60)
@@ -374,9 +379,9 @@ local function createCampStructures(camp)
 	light.Brightness = 2
 	light.Parent = flame
 
-	-- Палатки (короб + клиновидная крыша).
-	local function createTent(name, tentCenter)
-		createPart(name .. "_Body", Vector3.new(6, 2.4, 5), tentCenter, Color3.fromRGB(70, 60, 50), campModel)
+	-- Палатки (короб + клиновидная крыша). tentGround — точка на земле.
+	local function createTent(name, tentGround)
+		createPart(name .. "_Body", Vector3.new(6, 2.4, 5), tentGround + Vector3.new(0, 1.2, 0), Color3.fromRGB(70, 60, 50), campModel)
 
 		local roof = Instance.new("WedgePart")
 		roof.Name = name .. "_Roof"
@@ -384,18 +389,18 @@ local function createCampStructures(camp)
 		roof.Anchored = true
 		roof.CanCollide = false
 		roof.Color = Color3.fromRGB(90, 35, 35)
-		roof.CFrame = CFrame.new(tentCenter + Vector3.new(0, 2.2, 0)) * CFrame.Angles(0, math.rad(90), 0)
+		roof.CFrame = CFrame.new(tentGround + Vector3.new(0, 3.4, 0)) * CFrame.Angles(0, math.rad(90), 0)
 		roof.Parent = campModel
 	end
 
-	createTent("Tent_1", center + Vector3.new(-14, 0.2, -8))
-	createTent("Tent_2", center + Vector3.new(13, 0.2, -9))
+	createTent("Tent_1", center + Vector3.new(-14, 0, -8))
+	createTent("Tent_2", center + Vector3.new(13, 0, -9))
 
-	-- Знамя лагеря.
-	createPart("BannerPole", Vector3.new(0.4, 8, 0.4), center + Vector3.new(0, 2, -12), Color3.fromRGB(60, 45, 30), campModel)
-	createPart("BannerFlag", Vector3.new(0.2, 2.6, 3.4), center + Vector3.new(0, 4.2, -10.3), Color3.fromRGB(120, 30, 40), campModel)
+	-- Знамя лагеря (столб высотой 8, центр на Y = 4).
+	createPart("BannerPole", Vector3.new(0.4, 8, 0.4), center + Vector3.new(0, 4, -12), Color3.fromRGB(60, 45, 30), campModel)
+	createPart("BannerFlag", Vector3.new(0.2, 2.6, 3.4), center + Vector3.new(0, 6.2, -10.3), Color3.fromRGB(120, 30, 40), campModel)
 
-	createTextSign(camp.Id .. "_Sign", camp.DisplayName, center + Vector3.new(0, 1.4, 14), campModel)
+	createTextSign(camp.Id .. "_Sign", camp.DisplayName, center + Vector3.new(0, 1.5, 14), campModel)
 
 	campModel.Parent = folder
 	return campModel
