@@ -36,12 +36,14 @@ local WorldService = require(Services.WorldService)
 local NPCService = require(Services.NPCService)
 local ResourceService = require(Services.ResourceService)
 local AdminService = require(Services.AdminService)
+local CombatService = require(Services.CombatService)
 
 -- Порядок старта мира: сначала сцена, затем NPC и ресурсы.
 WorldService.CreateStartWorld()
 NPCService.CreateVillageElder()
 ResourceService.CreateResourceNodes()
 AdminService.Start()
+CombatService.Start()
 
 local function onPlayerAdded(player)
 	print(string.format("[ServerMain] %s joined. Loading player data...", player.Name))
