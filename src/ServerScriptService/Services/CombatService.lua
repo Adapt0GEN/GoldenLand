@@ -102,6 +102,23 @@ local function getCampsFolder()
 	return folder
 end
 
+-- Находит высоту земли в точке (x, z) лучом сверху вниз, не полагаясь на хардкод Y.
+-- Это map-agnostic: работает с baseplate, террейном и склонами.
+local function getGroundY(x, z, fallbackY)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { getEnemiesFolder(), getCampsFolder() }
+	params.IgnoreWater = true
+
+	local result = Workspace:Raycast(Vector3.new(x, 500, z), Vector3.new(0, -1000, 0), params)
+
+	if result then
+		return result.Position.Y
+	end
+
+	return fallbackY or 0
+end
+
 -- Полоска здоровья над врагом, собранная без внешних ассетов.
 local function createHealthBar(headPart)
 	local billboard = Instance.new("BillboardGui")
@@ -175,9 +192,11 @@ local function createEnemy(params)
 	local model = Instance.new("Model")
 	model.Name = params.Name
 
-	-- params.Position — точка на земле (под ногами). Поднимаем тело на половину высоты,
-	-- чтобы враг стоял на земле, а не висел в воздухе.
-	local bodyCenter = params.Position + Vector3.new(0, 2, 0)
+	-- params.Position задаёт X/Z; реальную высоту земли находим лучом. Затем поднимаем
+	-- тело на половину высоты, чтобы враг стоял на земле, а не висел в воздухе.
+	local groundY = getGroundY(params.Position.X, params.Position.Z, params.Position.Y)
+	local feet = Vector3.new(params.Position.X, groundY, params.Position.Z)
+	local bodyCenter = feet + Vector3.new(0, 2, 0)
 	local body = createPart("Body", Vector3.new(2.4, 4, 1.6), bodyCenter, color, model)
 
 	createPart(
@@ -363,7 +382,9 @@ local function createCampStructures(camp)
 		return folder[camp.Id]
 	end
 
-	local center = camp.Center
+	-- Высоту лагеря привязываем к реальной земле под его центром.
+	local groundY = getGroundY(camp.Center.X, camp.Center.Z, camp.Center.Y)
+	local center = Vector3.new(camp.Center.X, groundY, camp.Center.Z)
 	local campModel = Instance.new("Model")
 	campModel.Name = camp.Id
 	campModel:SetAttribute("CampId", camp.Id)
