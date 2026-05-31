@@ -69,6 +69,9 @@ local function onPlayerAdded(player)
 			print(string.format("[ServerMain] Restored house visual for %s at level %d.", player.Name, houseLevel))
 		end
 	end
+
+	-- Восстанавливаем захваченные игроком лагеря (убираем врагов, ставим визуал захвата).
+	CombatService.RestoreCampsForPlayer(player)
 end
 
 local function onPlayerRemoving(player)

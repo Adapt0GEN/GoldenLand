@@ -118,6 +118,7 @@ local function createDefaultProfile(player)
 		RockZoneUnlocked = false,
 		ForestZoneState = "Locked",
 		ForestZoneClearedObjects = {},
+		CapturedCamps = {},
 		CurrentQuestId = nil,
 		CompletedQuests = {},
 		QuestProgress = {},
@@ -467,6 +468,10 @@ local function normalizeLoadedProfile(player, savedProfile)
 		profile.QuestProgress = copyTable(savedProfile.QuestProgress)
 	end
 
+	if type(savedProfile.CapturedCamps) == "table" then
+		profile.CapturedCamps = copyTable(savedProfile.CapturedCamps)
+	end
+
 	profile.ResourceZones = normalizeResourceZones(savedProfile.ResourceZones, savedProfile.ResourceAreas)
 	profile.ForestZoneState = normalizeForestZoneState(savedProfile, profile)
 	profile.ForestZoneClearedObjects = normalizeForestZoneClearedObjects(savedProfile, profile)
@@ -491,6 +496,7 @@ local function createSaveData(profile)
 		RockZoneUnlocked = profile.RockZoneUnlocked,
 		ForestZoneState = profile.ForestZoneState,
 		ForestZoneClearedObjects = copyTable(profile.ForestZoneClearedObjects),
+		CapturedCamps = copyTable(profile.CapturedCamps),
 		CurrentQuestId = profile.CurrentQuestId,
 		CompletedQuests = copyTable(profile.CompletedQuests),
 		QuestProgress = copyTable(profile.QuestProgress),

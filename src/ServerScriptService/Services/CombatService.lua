@@ -13,6 +13,7 @@ local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CurrencyService = require(script.Parent.CurrencyService)
+local PlayerDataService = require(script.Parent.PlayerDataService)
 
 local CombatService = {}
 
@@ -38,6 +39,7 @@ local DUMMY_GOLD_REWARD = 10
 local HOSTILE_CAMP = {
 	Id = "BanditCamp_01",
 	DisplayName = "Враждебный лагерь",
+	CapturedName = "Освобождённая земля",
 	-- Центр на земле (Y = 0) и далеко от личного участка игрока, чтобы не перекрываться.
 	Center = Vector3.new(0, 0, -95),
 	Enemies = {
@@ -248,21 +250,78 @@ local function isCampCleared(campId)
 	return true
 end
 
+local function removeCampEnemies(campId)
+	for _, enemyModel in ipairs(getEnemiesFolder():GetChildren()) do
+		if enemyModel:GetAttribute("CampId") == campId then
+			enemyModel:Destroy()
+		end
+	end
+end
+
+-- Превращает враждебный лагерь в захваченную (твою) территорию: знамя становится
+-- дружественным, костёр гаснет, знак меняет текст.
+local function applyCapturedVisual(camp)
+	local campModel = getCampsFolder():FindFirstChild(camp.Id)
+
+	if not campModel then
+		return
+	end
+
+	campModel:SetAttribute("Cleared", true)
+	campModel:SetAttribute("Captured", true)
+
+	local flag = campModel:FindFirstChild("BannerFlag")
+
+	if flag then
+		flag.Color = Color3.fromRGB(70, 170, 90)
+	end
+
+	local campfire = campModel:FindFirstChild("Campfire")
+
+	if campfire then
+		campfire.Color = Color3.fromRGB(120, 120, 130)
+		campfire.Material = Enum.Material.Slate
+
+		local light = campfire:FindFirstChildOfClass("PointLight")
+
+		if light then
+			light:Destroy()
+		end
+	end
+
+	local sign = campModel:FindFirstChild(camp.Id .. "_Sign")
+	local surface = sign and sign:FindFirstChild("TextSurface")
+	local label = surface and surface:FindFirstChildWhichIsA("TextLabel")
+
+	if label then
+		label.Text = camp.CapturedName
+	end
+end
+
 local function onCampCleared(campId, attacker)
 	print(string.format("[CombatService] Camp %s cleared.", campId))
 
-	local campModel = getCampsFolder():FindFirstChild(campId)
-
-	if campModel then
-		campModel:SetAttribute("Cleared", true)
-	end
+	applyCapturedVisual(HOSTILE_CAMP)
 
 	if attacker then
 		if HOSTILE_CAMP.Id == campId and HOSTILE_CAMP.ClearBonusGold > 0 then
 			CurrencyService.AddGold(attacker, HOSTILE_CAMP.ClearBonusGold)
 		end
 
-		sendPlayerMessage(attacker, "Лагерь зачищен!")
+		-- Сохраняем захват в профиль игрока, чтобы лагерь остался твоим после перезахода.
+		local profile = PlayerDataService.GetProfile(attacker)
+
+		if profile then
+			profile.CapturedCamps = profile.CapturedCamps or {}
+			profile.CapturedCamps[campId] = true
+			PlayerDataService.MarkDirty(attacker)
+
+			if PlayerDataService.SaveProfile then
+				PlayerDataService.SaveProfile(attacker)
+			end
+		end
+
+		sendPlayerMessage(attacker, "Лагерь зачищен! Земля теперь твоя.")
 	end
 end
 
@@ -531,6 +590,23 @@ function CombatService.Start()
 	end)
 
 	print("[CombatService] Combat service started.")
+end
+
+-- Восстанавливает захваченные лагеря по профилю игрока: убирает врагов и
+-- применяет визуал захвата. Вызывается из ServerMain после загрузки профиля.
+function CombatService.RestoreCampsForPlayer(player)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile or type(profile.CapturedCamps) ~= "table" then
+		return
+	end
+
+	if profile.CapturedCamps[HOSTILE_CAMP.Id] then
+		campClearedFlags[HOSTILE_CAMP.Id] = true
+		removeCampEnemies(HOSTILE_CAMP.Id)
+		applyCapturedVisual(HOSTILE_CAMP)
+		print(string.format("[CombatService] Restored captured camp %s for %s.", HOSTILE_CAMP.Id, player.Name))
+	end
 end
 
 return CombatService
