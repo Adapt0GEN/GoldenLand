@@ -52,6 +52,16 @@ local HOSTILE_CAMP = {
 	OutpostOffset = Vector3.new(0, 0, 6),
 }
 
+-- Спасённый житель (NPC). Появляется только на захваченной земле; после разговора
+-- присоединяется к лагерю игрока. Это фундамент для будущих NPC-работников.
+local RESCUED_NPC_NAME = "RescuedNPC"
+local RESCUED_NPC_PROMPT_NAME = "TalkToRescuedNPCPrompt"
+-- Смещение от центра лагеря, в стороне от аванпоста/маркера (OutpostOffset = (0,0,6)),
+-- чтобы NPC не перекрывал постройку.
+local RESCUED_NPC_OFFSET = Vector3.new(-8, 0, 6)
+local RESCUED_NPC_TALKABLE_COLOR = Color3.fromRGB(70, 130, 200) -- дружелюбный синий
+local RESCUED_NPC_JOINED_COLOR = Color3.fromRGB(70, 170, 90) -- зелёный = присоединился
+
 -- Стоимость постройки аванпоста на захваченной земле.
 local OUTPOST_COST = {
 	Wood = 30,
@@ -455,6 +465,207 @@ local function showOutpostForProfile(camp, profile)
 	end
 end
 
+-- Перекрашивает тело и голову NPC (голова чуть светлее тела).
+local function setRescuedNPCColor(model, color)
+	local body = model:FindFirstChild("Body")
+
+	if body then
+		body.Color = color
+	end
+
+	local head = model:FindFirstChild("Head")
+
+	if head then
+		head.Color = color:Lerp(Color3.fromRGB(255, 255, 255), 0.3)
+	end
+end
+
+-- Имя-тег над NPC (BillboardGui + TextLabel), без внешних ассетов. Создаёт тег один
+-- раз и обновляет текст при повторных вызовах.
+local function setRescuedNPCNameTag(model, text)
+	local head = model:FindFirstChild("Head")
+
+	if not head then
+		return
+	end
+
+	local billboard = head:FindFirstChild("NameTag")
+
+	if not billboard then
+		billboard = Instance.new("BillboardGui")
+		billboard.Name = "NameTag"
+		billboard.Size = UDim2.fromOffset(150, 24)
+		billboard.StudsOffsetWorldSpace = Vector3.new(0, 2.4, 0)
+		billboard.AlwaysOnTop = true
+		billboard.Adornee = head
+		billboard.Parent = head
+
+		local label = Instance.new("TextLabel")
+		label.Name = "Label"
+		label.Size = UDim2.fromScale(1, 1)
+		label.BackgroundTransparency = 1
+		label.TextScaled = true
+		label.Font = Enum.Font.SourceSansBold
+		label.TextColor3 = Color3.fromRGB(230, 240, 255)
+		label.Parent = billboard
+	end
+
+	local label = billboard:FindFirstChild("Label")
+
+	if label then
+		label.Text = text
+	end
+end
+
+-- Создаёт модель спасённого NPC (тело + голова) на земле через getGroundY.
+-- Защита от дублей: при наличии модели возвращает существующую.
+local function createRescuedNPCModel(camp)
+	local campModel = getCampsFolder():FindFirstChild(camp.Id)
+
+	if not campModel then
+		return nil
+	end
+
+	local existing = campModel:FindFirstChild(RESCUED_NPC_NAME)
+
+	if existing then
+		return existing
+	end
+
+	local spot = camp.Center + RESCUED_NPC_OFFSET
+	local groundY = getGroundY(spot.X, spot.Z, spot.Y)
+	local feet = Vector3.new(spot.X, groundY, spot.Z)
+	local bodyCenter = feet + Vector3.new(0, 2, 0)
+
+	local model = Instance.new("Model")
+	model.Name = RESCUED_NPC_NAME
+	model:SetAttribute("RescuedNPC", true)
+
+	local body = createPart("Body", Vector3.new(2.2, 4, 1.4), bodyCenter, RESCUED_NPC_TALKABLE_COLOR, model)
+	createPart(
+		"Head",
+		Vector3.new(1.5, 1.5, 1.5),
+		bodyCenter + Vector3.new(0, 2.7, 0),
+		RESCUED_NPC_TALKABLE_COLOR:Lerp(Color3.fromRGB(255, 255, 255), 0.3),
+		model
+	)
+	model.PrimaryPart = body
+
+	model.Parent = campModel
+	return model
+end
+
+-- Присоединившийся NPC: зелёный цвет, тег "Житель лагеря", без ProximityPrompt.
+local function applyJoinedNPCVisual(model)
+	model:SetAttribute("Joined", true)
+	setRescuedNPCColor(model, RESCUED_NPC_JOINED_COLOR)
+	setRescuedNPCNameTag(model, "Житель лагеря")
+
+	local body = model.PrimaryPart or model:FindFirstChild("Body")
+	local prompt = body and body:FindFirstChild(RESCUED_NPC_PROMPT_NAME)
+
+	if prompt then
+		prompt:Destroy()
+	end
+end
+
+-- Обработка разговора: только сервер решает join. Проверяет захват, ставит флаг,
+-- сохраняет профиль, шлёт сообщение и обновляет визуал NPC на "присоединился".
+local function onTalkToRescuedNPC(player, camp)
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return
+	end
+
+	if not (type(profile.CapturedCamps) == "table" and profile.CapturedCamps[camp.Id]) then
+		sendPlayerMessage(player, "Сначала зачисти лагерь")
+		return
+	end
+
+	if type(profile.JoinedNPCs) == "table" and profile.JoinedNPCs[camp.Id] then
+		return
+	end
+
+	profile.JoinedNPCs = profile.JoinedNPCs or {}
+	profile.JoinedNPCs[camp.Id] = true
+	PlayerDataService.MarkDirty(player)
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player)
+	end
+
+	local campModel = getCampsFolder():FindFirstChild(camp.Id)
+	local model = campModel and campModel:FindFirstChild(RESCUED_NPC_NAME)
+
+	if model then
+		applyJoinedNPCVisual(model)
+	end
+
+	sendPlayerMessage(player, "Житель присоединился к вашему лагерю")
+	print(string.format("[CombatService] %s recruited rescued NPC at %s.", player.Name, camp.Id))
+end
+
+-- Говорящий NPC: синий цвет, тег "Спасённый житель", ровно один ProximityPrompt.
+local function applyTalkableNPCVisual(model, camp)
+	model:SetAttribute("Joined", false)
+	setRescuedNPCColor(model, RESCUED_NPC_TALKABLE_COLOR)
+	setRescuedNPCNameTag(model, "Спасённый житель")
+
+	local body = model.PrimaryPart or model:FindFirstChild("Body")
+
+	if body and not body:FindFirstChild(RESCUED_NPC_PROMPT_NAME) then
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.Name = RESCUED_NPC_PROMPT_NAME
+		prompt.ObjectText = "Спасённый житель"
+		prompt.ActionText = "Поговорить"
+		prompt.HoldDuration = 0.5
+		prompt.MaxActivationDistance = 10
+		prompt.RequiresLineOfSight = false
+		prompt.Parent = body
+
+		prompt.Triggered:Connect(function(player)
+			onTalkToRescuedNPC(player, camp)
+		end)
+	end
+end
+
+-- По профилю игрока строит/обновляет спасённого NPC у захваченного лагеря.
+-- Availability gate: без захвата NPC не создаётся. Если уже присоединился —
+-- показываем "присоединился" без говорящего промпта; иначе — говорящий NPC.
+local function showRescuedNPCForProfile(camp, profile, player)
+	if not profile then
+		return
+	end
+
+	if not (type(profile.CapturedCamps) == "table" and profile.CapturedCamps[camp.Id]) then
+		return
+	end
+
+	local campModel = getCampsFolder():FindFirstChild(camp.Id)
+
+	if not campModel then
+		return
+	end
+
+	local model = createRescuedNPCModel(camp)
+
+	if not model then
+		return
+	end
+
+	local joined = type(profile.JoinedNPCs) == "table" and profile.JoinedNPCs[camp.Id] == true
+	local playerName = if player then player.Name else "unknown"
+
+	if joined then
+		applyJoinedNPCVisual(model)
+		print(string.format("[CombatService] Restored joined NPC at %s for %s.", camp.Id, playerName))
+	else
+		applyTalkableNPCVisual(model, camp)
+		print(string.format("[CombatService] Rescued NPC available at %s for %s.", camp.Id, playerName))
+	end
+end
+
 local function onCampCleared(campId, attacker)
 	print(string.format("[CombatService] Camp %s cleared.", campId))
 
@@ -478,6 +689,7 @@ local function onCampCleared(campId, attacker)
 			end
 
 			showOutpostForProfile(HOSTILE_CAMP, profile)
+			showRescuedNPCForProfile(HOSTILE_CAMP, profile, attacker)
 		end
 
 		sendPlayerMessage(attacker, "Лагерь зачищен! Земля теперь твоя.")
@@ -742,6 +954,7 @@ function CombatService.RestoreCampsForPlayer(player)
 		removeCampEnemies(HOSTILE_CAMP.Id)
 		applyCapturedVisual(HOSTILE_CAMP)
 		showOutpostForProfile(HOSTILE_CAMP, profile)
+		showRescuedNPCForProfile(HOSTILE_CAMP, profile, player)
 		print(string.format("[CombatService] Restored captured camp %s for %s.", HOSTILE_CAMP.Id, player.Name))
 	end
 end
