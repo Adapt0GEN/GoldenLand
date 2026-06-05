@@ -60,7 +60,20 @@ local RESCUED_NPC_PROMPT_NAME = "TalkToRescuedNPCPrompt"
 -- чтобы NPC не перекрывал постройку.
 local RESCUED_NPC_OFFSET = Vector3.new(-8, 0, 6)
 local RESCUED_NPC_TALKABLE_COLOR = Color3.fromRGB(70, 130, 200) -- дружелюбный синий
-local RESCUED_NPC_JOINED_COLOR = Color3.fromRGB(70, 170, 90) -- зелёный = присоединился
+
+-- Работник лагеря (CampWorker). Появляется после того, как спасённый житель
+-- присоединился: спасённый NPC больше не остаётся обычным NPC у лагеря, а становится
+-- дружелюбным работником рядом с аванпостом игрока (или у захваченного лагеря, если
+-- аванпоста ещё нет). Это визуальный фундамент будущей автоматизации работников
+-- (без пассивного дохода, профессий и реальной автоматизации).
+local CAMP_WORKER_NAME_PREFIX = "CampWorker_"
+local CAMP_WORKER_STATUS_PROMPT_NAME = "CampWorkerStatusPrompt"
+local CAMP_WORKER_COLOR = Color3.fromRGB(70, 170, 90) -- дружелюбный зелёный, отличается от синего спасённого NPC и красных врагов
+-- Смещение работника от построенного аванпоста (в стороне от платформы 9x9 и домика).
+local CAMP_WORKER_OUTPOST_OFFSET = Vector3.new(7, 0, 3)
+-- Запасная позиция у захваченного лагеря, если аванпост ещё не построен
+-- (симметрично спасённому NPC по другую сторону от маркера стройки).
+local CAMP_WORKER_FALLBACK_OFFSET = Vector3.new(8, 0, 6)
 
 -- Стоимость постройки аванпоста на захваченной земле.
 local OUTPOST_COST = {
@@ -74,6 +87,16 @@ local swingCooldownByUserId = {}
 local respawnSpecs = {}
 local campClearedFlags = {}
 local weaponTemplate = nil
+
+-- Имя модели работника лагеря: уникально по id лагеря (CampWorker_BanditCamp_01).
+local function getCampWorkerName(camp)
+	return CAMP_WORKER_NAME_PREFIX .. camp.Id
+end
+
+-- Forward-declared: работник лагеря создаётся/удаляется ниже (после хелперов NPC),
+-- но используется в onBuildOutpost, объявленном раньше этих определений.
+local placeCampWorker
+local removeCampWorker
 
 local function createPart(name, size, position, color, parent)
 	local part = Instance.new("Part")
@@ -413,6 +436,18 @@ local function onBuildOutpost(player, camp)
 
 	removeBuildSpot(camp)
 	buildOutpostStructure(camp)
+
+	-- Если житель уже присоединился, переносим работника к построенному аванпосту.
+	-- Простой перенос: убираем старую модель и ставим заново у аванпоста (без системы
+	-- перемещения). placeCampWorker сам выбирает позицию у аванпоста, т.к. он теперь есть.
+	if type(profile.JoinedNPCs) == "table" and profile.JoinedNPCs[camp.Id] then
+		removeCampWorker(camp)
+
+		if placeCampWorker(camp, profile) == "outpost" then
+			print(string.format("[CombatService] Camp worker placed near outpost at %s for %s.", camp.Id, player.Name))
+		end
+	end
+
 	sendPlayerMessage(player, "Аванпост построен!")
 	print(string.format("[CombatService] %s built outpost at %s.", player.Name, camp.Id))
 end
@@ -555,17 +590,84 @@ local function createRescuedNPCModel(camp)
 	return model
 end
 
--- Присоединившийся NPC: зелёный цвет, тег "Житель лагеря", без ProximityPrompt.
-local function applyJoinedNPCVisual(model)
-	model:SetAttribute("Joined", true)
-	setRescuedNPCColor(model, RESCUED_NPC_JOINED_COLOR)
+-- Разговор с работником лагеря: чисто информационное взаимодействие. Ничего не
+-- начисляет, не списывает и не меняет экономику — это только заглушка под будущую
+-- автоматизацию. Server-authoritative: сообщение шлёт сервер.
+local function onTalkToCampWorker(player, camp)
+	sendPlayerMessage(player, "Житель ждёт поручений. Автоматизация будет доступна позже.")
+	print(string.format("[CombatService] %s talked to camp worker at %s.", player.Name, camp.Id))
+end
+
+-- Создаёт дружелюбного работника лагеря (тело + голова + тег + статус-промпт) у
+-- аванпоста, если он построен, иначе — у захваченного лагеря (fallback).
+-- Защита от дублей: если работник уже есть, возвращает nil и ничего не создаёт.
+-- Возвращает "outpost" или "fallback" в зависимости от выбранной позиции.
+function placeCampWorker(camp, profile)
+	local campModel = getCampsFolder():FindFirstChild(camp.Id)
+
+	if not campModel then
+		return nil
+	end
+
+	if campModel:FindFirstChild(getCampWorkerName(camp)) then
+		return nil
+	end
+
+	local nearOutpost = type(profile.CampOutposts) == "table" and profile.CampOutposts[camp.Id] == true
+	local spot
+
+	if nearOutpost then
+		spot = camp.Center + camp.OutpostOffset + CAMP_WORKER_OUTPOST_OFFSET
+	else
+		spot = camp.Center + CAMP_WORKER_FALLBACK_OFFSET
+	end
+
+	local groundY = getGroundY(spot.X, spot.Z, spot.Y)
+	local feet = Vector3.new(spot.X, groundY, spot.Z)
+	local bodyCenter = feet + Vector3.new(0, 2, 0)
+
+	local model = Instance.new("Model")
+	model.Name = getCampWorkerName(camp)
+	model:SetAttribute("CampWorker", true)
+	model:SetAttribute("CampId", camp.Id)
+
+	local body = createPart("Body", Vector3.new(2.2, 4, 1.4), bodyCenter, CAMP_WORKER_COLOR, model)
+	createPart(
+		"Head",
+		Vector3.new(1.5, 1.5, 1.5),
+		bodyCenter + Vector3.new(0, 2.7, 0),
+		CAMP_WORKER_COLOR:Lerp(Color3.fromRGB(255, 255, 255), 0.3),
+		model
+	)
+	model.PrimaryPart = body
+
 	setRescuedNPCNameTag(model, "Житель лагеря")
 
-	local body = model.PrimaryPart or model:FindFirstChild("Body")
-	local prompt = body and body:FindFirstChild(RESCUED_NPC_PROMPT_NAME)
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = CAMP_WORKER_STATUS_PROMPT_NAME
+	prompt.ObjectText = "Житель лагеря"
+	prompt.ActionText = "Поговорить"
+	prompt.HoldDuration = 0.5
+	prompt.MaxActivationDistance = 10
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = body
 
-	if prompt then
-		prompt:Destroy()
+	prompt.Triggered:Connect(function(triggeringPlayer)
+		onTalkToCampWorker(triggeringPlayer, camp)
+	end)
+
+	model.Parent = campModel
+
+	return if nearOutpost then "outpost" else "fallback"
+end
+
+-- Убирает модель работника лагеря (для контролируемого переноса к аванпосту).
+function removeCampWorker(camp)
+	local campModel = getCampsFolder():FindFirstChild(camp.Id)
+	local worker = campModel and campModel:FindFirstChild(getCampWorkerName(camp))
+
+	if worker then
+		worker:Destroy()
 	end
 end
 
@@ -595,11 +697,21 @@ local function onTalkToRescuedNPC(player, camp)
 		PlayerDataService.SaveProfile(player)
 	end
 
+	-- Спасённый NPC больше не остаётся обычным NPC у лагеря: убираем говорящую модель
+	-- и ставим работника лагеря (у аванпоста, если он есть, иначе — у захваченного лагеря).
 	local campModel = getCampsFolder():FindFirstChild(camp.Id)
-	local model = campModel and campModel:FindFirstChild(RESCUED_NPC_NAME)
+	local rescued = campModel and campModel:FindFirstChild(RESCUED_NPC_NAME)
 
-	if model then
-		applyJoinedNPCVisual(model)
+	if rescued then
+		rescued:Destroy()
+	end
+
+	local placement = placeCampWorker(camp, profile)
+
+	if placement == "outpost" then
+		print(string.format("[CombatService] Camp worker placed near outpost at %s for %s.", camp.Id, player.Name))
+	elseif placement == "fallback" then
+		print(string.format("[CombatService] Camp worker placed near captured camp fallback at %s for %s.", camp.Id, player.Name))
 	end
 
 	sendPlayerMessage(player, "Житель присоединился к вашему лагерю")
@@ -630,9 +742,9 @@ local function applyTalkableNPCVisual(model, camp)
 	end
 end
 
--- По профилю игрока строит/обновляет спасённого NPC у захваченного лагеря.
+-- По профилю игрока строит/обновляет NPC у захваченного лагеря.
 -- Availability gate: без захвата NPC не создаётся. Если уже присоединился —
--- показываем "присоединился" без говорящего промпта; иначе — говорящий NPC.
+-- показываем работника лагеря (CampWorker) без говорящего промпта; иначе — говорящий NPC.
 local function showRescuedNPCForProfile(camp, profile, player)
 	if not profile then
 		return
@@ -648,19 +760,29 @@ local function showRescuedNPCForProfile(camp, profile, player)
 		return
 	end
 
-	local model = createRescuedNPCModel(camp)
-
-	if not model then
-		return
-	end
-
 	local joined = type(profile.JoinedNPCs) == "table" and profile.JoinedNPCs[camp.Id] == true
 	local playerName = if player then player.Name else "unknown"
 
 	if joined then
-		applyJoinedNPCVisual(model)
-		print(string.format("[CombatService] Restored joined NPC at %s for %s.", camp.Id, playerName))
+		-- Присоединившийся: убираем говорящего спасённого NPC (если остался) и
+		-- восстанавливаем работника лагеря. placeCampWorker сам выбирает позицию
+		-- (у аванпоста, если он есть) и защищает от дублей.
+		local rescued = campModel:FindFirstChild(RESCUED_NPC_NAME)
+
+		if rescued then
+			rescued:Destroy()
+		end
+
+		if placeCampWorker(camp, profile) then
+			print(string.format("[CombatService] Camp worker restored at %s for %s.", camp.Id, playerName))
+		end
 	else
+		local model = createRescuedNPCModel(camp)
+
+		if not model then
+			return
+		end
+
 		applyTalkableNPCVisual(model, camp)
 		print(string.format("[CombatService] Rescued NPC available at %s for %s.", camp.Id, playerName))
 	end
