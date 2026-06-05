@@ -1,44 +1,54 @@
-# Phase 2.2 — Move joined NPC to player outpost as first camp worker
+# Phase 2.3 — Camp worker job assignment placeholder
 
 ## Current context
 
 GoldenLand is a Roblox/Rojo single-player MVP.
 
-Phase 1 is implemented and tested:
-
-* player receives a basic sword on spawn;
-* left mouse attack damages enemies;
-* hostile camp `BanditCamp_01` exists;
-* camp can be captured after enemies are defeated;
-* captured camp state persists;
-* outpost marker/prompt appears on captured land;
-* built outpost persists and restores.
-
 Phase 2.1 is implemented and tested:
 
 * after `BanditCamp_01` is captured, a rescued NPC appears;
-* the rescued NPC has a ProximityPrompt:
-
-  * ObjectText = `Спасённый житель`
-  * ActionText = `Поговорить`
 * talking to the NPC marks him as joined in the player profile;
-* joined state is saved in `profile.JoinedNPCs`;
-* after Stop -> Play, the NPC is restored as already joined;
-* no passive income or full worker automation exists yet.
+* joined state is saved in `profile.JoinedNPCs`.
+
+Phase 2.2 is implemented and tested:
+
+* after the rescued NPC joins, its final form is the camp worker
+  `CampWorker_BanditCamp_01`;
+* the worker has a visible name tag `Житель лагеря`;
+* the worker has a status prompt `CampWorkerStatusPrompt`
+  (ObjectText = `Житель лагеря`, ActionText = `Поговорить`,
+  HoldDuration = `0.5`, MaxActivationDistance = `10`,
+  RequiresLineOfSight = `false`);
+* talking to the worker only shows an informational message
+  (`Житель ждёт поручений. Автоматизация будет доступна позже.`);
+* the worker interaction does not add/spend resources or change economy;
+* `CampWorker_BanditCamp_01` restores after Stop -> Play;
+* the worker currently has only an informational prompt and no job.
+
+So far:
+
+* `JoinedNPCs` exists and is saved;
+* no passive income exists yet;
+* no full worker automation exists yet;
+* no jobs/professions system exists yet.
 
 ## Goal
 
-Implement the next small foundation step for future worker automation.
+Add a minimal **server-authoritative job assignment placeholder** for the camp
+worker. The player should be able to talk to `CampWorker_BanditCamp_01` and
+assign a simple saved worker role, but the role must **not** produce resources
+yet.
 
-After a rescued NPC joins the player, the NPC should no longer remain only as a generic joined NPC at the hostile camp. Instead, the joined NPC should appear as a friendly **CampWorker** near the player’s built outpost if the outpost exists.
+This is still a foundation step before passive automation — add the first saved
+worker assignment state only.
 
-If the outpost does not exist yet, use a safe fallback position near the captured camp.
-
-This task is visual/state foundation only.
+Keep the scope very small.
 
 Do **not** implement passive income yet.
+Do **not** implement timed production yet.
 Do **not** implement full worker automation yet.
-Do **not** implement jobs, professions, town systems, classes, backpack, food/fatigue, or advanced combat.
+Do **not** implement a UI menu unless absolutely necessary.
+Do **not** implement town systems, classes, backpack, food/fatigue, or advanced combat.
 
 ## Files to inspect
 
@@ -49,124 +59,97 @@ Before editing, inspect:
 * `docs/06_development_rules.md`
 * `src/ServerScriptService/Services/CombatService.lua`
 * `src/ServerScriptService/Services/PlayerDataService.lua`
-* `src/ServerScriptService/Services/PlotService.lua`
 * `src/ServerScriptService/ServerMain.server.lua`
+
+## Likely files to edit
+
+* `src/ServerScriptService/Services/PlayerDataService.lua`
+* `src/ServerScriptService/Services/CombatService.lua`
 
 ## Implementation requirements
 
-### 1. Keep Phase 2.1 behavior before the NPC joins
+### Saved profile field
 
-If `BanditCamp_01` is captured but the rescued NPC has not joined yet:
+Add a new saved profile field for worker assignments:
 
-* keep the existing talkable rescued NPC near the captured camp;
-* keep the existing prompt:
+* `WorkerAssignments = {}`
 
-  * ObjectText = `Спасённый житель`
-  * ActionText = `Поговорить`
-* do not break existing recruitment behavior.
+Example:
 
-### 2. Add CampWorker visual after joining
+* `profile.WorkerAssignments["BanditCamp_01"] = "Idle"`
+* later values can include `"Wood"` or `"Stone"`, but for this task keep it
+  simple — only `"Idle"` is used.
 
-If the rescued NPC is already joined, create a friendly worker visual:
+Add the field in all three places in `PlayerDataService` (default profile,
+loaded/normalized profile, save data), following the existing pattern used for
+`JoinedNPCs` / `CampOutposts`.
 
-* Name = `CampWorker_BanditCamp_01`
-* visible name tag = `Житель лагеря`
-* friendly color/appearance, visually distinct from enemies and from the unjoined rescued NPC;
-* place the worker near the player’s outpost if the outpost exists;
-* if the outpost does not exist, place the worker near the captured camp fallback position;
-* use existing ground placement/raycast helper patterns where possible.
+Old saves must remain safe:
 
-### 3. Add CampWorker ProximityPrompt
+* missing `WorkerAssignments` loads as an empty table `{}`;
+* no `nil` indexing on old saves;
+* existing `CapturedCamps`, `CampOutposts`, and `JoinedNPCs` saves continue to work.
 
-The joined worker should have a simple status prompt:
+### Minimal behavior
 
-* Name = `CampWorkerStatusPrompt`
-* ObjectText = `Житель лагеря`
-* ActionText = `Поговорить`
-* HoldDuration = `0.5`
-* MaxActivationDistance = `10`
-* RequiresLineOfSight = `false`
+When the player talks to `CampWorker_BanditCamp_01`:
 
-When the player talks to the worker, send this message:
+If no assignment exists for the camp:
 
-`Житель ждёт поручений. Автоматизация будет доступна позже.`
+* set assignment for `BanditCamp_01` to `"Idle"`;
+* mark the profile dirty and save (server-side);
+* send message:
+  * `Житель назначен в лагерь. Задания появятся позже.`
 
-This interaction must not add resources, spend resources, start production, or change economy state.
+If an assignment already exists for the camp:
+
+* send message:
+  * `Житель лагеря: текущее задание — ожидание.`
+
+Rules:
+
+* no resources should be added or spent;
+* no production should start;
+* no timers should be created;
+* no loop should be introduced.
+
+> Note: this replaces the current Phase 2.2 informational-only talk handler for
+> the camp worker. The talk handler now writes/reads the `"Idle"` assignment as
+> described above instead of only showing the static informational message.
+
+### Visual/status requirement
+
+If the worker has assignment `"Idle"`:
+
+* the worker should still be visible as `Житель лагеря`;
+* optionally update the prompt `ObjectText` or message, but keep it simple;
+* do not create a complex UI.
 
 ## Restore behavior
 
 On Stop -> Play:
 
-### If the camp is not captured
-
-* no rescued NPC;
-* no camp worker.
-
-### If the camp is captured but the NPC is not joined
-
-* restore the existing talkable rescued NPC near the captured camp;
-* do not create the camp worker.
-
-### If the NPC is joined
-
-* restore `CampWorker_BanditCamp_01`;
-* place it near the outpost if possible;
-* otherwise place it near the captured camp fallback position;
-* do not restore the talkable rescued NPC prompt.
-
-## Outpost interaction
-
-If the player joined the rescued NPC before building an outpost:
-
-* the worker may appear near the captured camp fallback position.
-
-If the player later builds the outpost:
-
-* after outpost build or after Stop -> Play, the worker should appear near the outpost if this can be done safely with the current architecture.
-
-Keep this simple. Do not introduce a large relocation system unless absolutely necessary.
-
-## Duplication protection
-
-Prevent duplicates:
-
-* at most one `RescuedNPC` per camp;
-* at most one `CampWorker_BanditCamp_01` per camp;
-* no duplicate prompts;
-* repeated restore calls must not create multiple workers;
-* repeated prompt triggers must not duplicate visuals or state.
+* `WorkerAssignments` should persist;
+* the worker should restore as before (Phase 2.2 behavior unchanged);
+* talking to the worker should show the already-assigned message
+  (`Житель лагеря: текущее задание — ожидание.`).
 
 ## Server-authoritative rules
 
-All state and progression must remain server-authoritative:
+All state must be changed on the server:
 
-* the client may only trigger ProximityPrompt interaction;
-* the server validates profile state;
-* the server creates/removes/updates NPC visuals;
-* the server sends player messages;
+* the client may only trigger the `ProximityPrompt`;
+* the server validates the profile;
+* the server writes the assignment;
+* the server sends the player message;
 * no client-provided state should be trusted.
 
-## Save/profile requirements
+## Duplication protection
 
-Use the existing `JoinedNPCs` field from Phase 2.1.
-
-Do not add a new profile field unless it is clearly necessary.
-
-Old saves must remain safe:
-
-* missing `JoinedNPCs` must still load as an empty table;
-* existing captured camp and outpost saves must continue to work.
-
-## Diagnostic logs
-
-Add clear logs similar to existing style:
-
-* `[CombatService] Camp worker restored at BanditCamp_01 for PlayerName.`
-* `[CombatService] Camp worker placed near outpost at BanditCamp_01 for PlayerName.`
-* `[CombatService] Camp worker placed near captured camp fallback at BanditCamp_01 for PlayerName.`
-* `[CombatService] PlayerName talked to camp worker at BanditCamp_01.`
-
-Avoid noisy logs on every frame or repeated harmless restore.
+* no duplicate workers;
+* no duplicate prompts;
+* repeated prompt use should not duplicate state (idempotent assignment);
+* repeated restore should not duplicate visuals.
 
 ## Do not touch
 
@@ -175,21 +158,18 @@ Do not change:
 * `default.project.json`
 * Rojo mapping
 * `src/Workspace`
-* R15/R6/avatar/player rig/avatar settings
+* avatar/R15/R6/player rig settings
 * unrelated services
-* unrelated economy numbers
-* forge logic
-* storage logic
-* workshop logic
-* house logic
-* resource gathering logic
-* advanced combat
+* forge/storage/workshop/house logic
+* resource gathering
+* combat balance
+* passive income
+* timed production
+* full worker automation
+* jobs/professions beyond the placeholder
 * classes
 * backpack
 * food/fatigue
-* passive income
-* full worker automation
-* jobs/professions
 * town systems
 
 ## Conflict marker check
@@ -211,38 +191,23 @@ At the end, provide:
 3. short explanation of what changed;
 4. diff summary;
 5. Roblox Studio test checklist;
-6. risks or things to verify manually.
+6. risks / manual verification notes.
 
 Do not create a PR unless explicitly asked.
 
 ## Roblox Studio test checklist
 
-1. Start Play with an existing profile where `BanditCamp_01` is captured and the rescued NPC is already joined.
-
-2. Confirm `CampWorker_BanditCamp_01` appears.
-
-3. Confirm the worker has the visible name tag `Житель лагеря`.
-
-4. Confirm the worker appears near the outpost if the outpost exists.
-
-5. Confirm there is no duplicate rescued NPC near the hostile camp.
-
-6. Confirm there is no duplicate camp worker.
-
-7. Talk to the worker.
-
-8. Confirm the message appears:
-
-   `Житель ждёт поручений. Автоматизация будет доступна позже.`
-
-9. Confirm no resources are added or spent by this interaction.
-
-10. Stop -> Play.
-
-11. Confirm the worker restores correctly.
-
-12. Confirm there are still no duplicate workers or prompts.
-
-13. Confirm the existing combat/capture/outpost loop still works.
-
-14. Check Output for errors.
+1. Start Play with a profile where `CampWorker_BanditCamp_01` exists.
+2. Talk to the worker.
+3. Confirm message:
+   * `Житель назначен в лагерь. Задания появятся позже.`
+4. Confirm resources do not change.
+5. Talk to the worker again.
+6. Confirm message:
+   * `Житель лагеря: текущее задание — ожидание.`
+7. Stop -> Play.
+8. Talk to the worker again.
+9. Confirm the assignment persisted and the already-assigned message appears.
+10. Confirm no duplicate workers or prompts.
+11. Confirm no passive resources are generated.
+12. Confirm no Output errors.
