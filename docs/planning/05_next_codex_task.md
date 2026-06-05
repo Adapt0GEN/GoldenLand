@@ -7,46 +7,35 @@ GoldenLand is a Roblox/Rojo single-player MVP.
 Phase 2.1 is implemented and tested:
 
 * after `BanditCamp_01` is captured, a rescued NPC appears;
-* talking to the NPC marks him as joined in the player profile;
-* joined state is saved in `profile.JoinedNPCs`.
+* the player can talk to the rescued NPC;
+* the NPC joins the player’s camp;
+* joined state is saved in `profile.JoinedNPCs`;
+* after Stop -> Play, the joined NPC restores correctly.
 
 Phase 2.2 is implemented and tested:
 
-* after the rescued NPC joins, its final form is the camp worker
-  `CampWorker_BanditCamp_01`;
+* the joined NPC is represented as `CampWorker_BanditCamp_01`;
 * the worker has a visible name tag `Житель лагеря`;
-* the worker has a status prompt `CampWorkerStatusPrompt`
-  (ObjectText = `Житель лагеря`, ActionText = `Поговорить`,
-  HoldDuration = `0.5`, MaxActivationDistance = `10`,
-  RequiresLineOfSight = `false`);
-* talking to the worker only shows an informational message
-  (`Житель ждёт поручений. Автоматизация будет доступна позже.`);
-* the worker interaction does not add/spend resources or change economy;
-* `CampWorker_BanditCamp_01` restores after Stop -> Play;
-* the worker currently has only an informational prompt and no job.
-
-So far:
-
-* `JoinedNPCs` exists and is saved;
+* the worker has a `CampWorkerStatusPrompt`;
+* talking to the worker currently only shows an informational message;
+* the worker restores after Stop -> Play;
 * no passive income exists yet;
+* no timed production exists yet;
 * no full worker automation exists yet;
 * no jobs/professions system exists yet.
 
 ## Goal
 
-Add a minimal **server-authoritative job assignment placeholder** for the camp
-worker. The player should be able to talk to `CampWorker_BanditCamp_01` and
-assign a simple saved worker role, but the role must **not** produce resources
-yet.
+Add the first minimal saved worker assignment state.
 
-This is still a foundation step before passive automation — add the first saved
-worker assignment state only.
+The player should be able to talk to `CampWorker_BanditCamp_01` and assign a simple saved placeholder role to the worker.
 
-Keep the scope very small.
+This is still a foundation step before passive automation.
 
-Do **not** implement passive income yet.
-Do **not** implement timed production yet.
-Do **not** implement full worker automation yet.
+Do **not** implement passive income.
+Do **not** implement timed production.
+Do **not** implement full worker automation.
+Do **not** implement a job/profession system beyond this placeholder.
 Do **not** implement a UI menu unless absolutely necessary.
 Do **not** implement town systems, classes, backpack, food/fatigue, or advanced combat.
 
@@ -63,93 +52,148 @@ Before editing, inspect:
 
 ## Likely files to edit
 
+Expected edits are likely limited to:
+
 * `src/ServerScriptService/Services/PlayerDataService.lua`
 * `src/ServerScriptService/Services/CombatService.lua`
 
+Do not edit docs in this implementation task unless the task requires a tiny clarification.
+
 ## Implementation requirements
 
-### Saved profile field
+### 1. Add saved worker assignment state
 
-Add a new saved profile field for worker assignments:
+Add a new saved profile field:
 
-* `WorkerAssignments = {}`
+```lua
+WorkerAssignments = {}
+```
+
+Use it to store worker assignment state by camp id.
 
 Example:
 
-* `profile.WorkerAssignments["BanditCamp_01"] = "Idle"`
-* later values can include `"Wood"` or `"Stone"`, but for this task keep it
-  simple — only `"Idle"` is used.
-
-Add the field in all three places in `PlayerDataService` (default profile,
-loaded/normalized profile, save data), following the existing pattern used for
-`JoinedNPCs` / `CampOutposts`.
+```lua
+profile.WorkerAssignments["BanditCamp_01"] = "Idle"
+```
 
 Old saves must remain safe:
 
-* missing `WorkerAssignments` loads as an empty table `{}`;
-* no `nil` indexing on old saves;
-* existing `CapturedCamps`, `CampOutposts`, and `JoinedNPCs` saves continue to work.
+* missing `WorkerAssignments` should load as an empty table;
+* no nil-index errors;
+* existing saves with `JoinedNPCs`, `CapturedCamps`, and `CampOutposts` must continue to work.
 
-### Minimal behavior
+Update `PlayerDataService.lua` consistently in all required profile places:
+
+* default profile;
+* loaded profile normalization;
+* save serialization;
+* public profile only if it matches existing diagnostic patterns and is useful.
+
+### 2. Update camp worker prompt behavior
+
+`CampWorker_BanditCamp_01` already exists from Phase 2.2 and has `CampWorkerStatusPrompt`.
+
+Update the worker prompt behavior:
 
 When the player talks to `CampWorker_BanditCamp_01`:
 
-If no assignment exists for the camp:
+#### If no assignment exists for `BanditCamp_01`
 
-* set assignment for `BanditCamp_01` to `"Idle"`;
-* mark the profile dirty and save (server-side);
+Set:
+
+```lua
+profile.WorkerAssignments["BanditCamp_01"] = "Idle"
+```
+
+Then:
+
+* mark the profile dirty using the existing project pattern;
+* save/update profile using the existing project pattern if appropriate;
 * send message:
-  * `Житель назначен в лагерь. Задания появятся позже.`
 
-If an assignment already exists for the camp:
+```text
+Житель назначен в лагерь. Задания появятся позже.
+```
 
-* send message:
-  * `Житель лагеря: текущее задание — ожидание.`
+#### If assignment already exists
 
-Rules:
+Do not duplicate state.
 
-* no resources should be added or spent;
-* no production should start;
-* no timers should be created;
-* no loop should be introduced.
+Send message:
 
-> Note: this replaces the current Phase 2.2 informational-only talk handler for
-> the camp worker. The talk handler now writes/reads the `"Idle"` assignment as
-> described above instead of only showing the static informational message.
+```text
+Житель лагеря: текущее задание — ожидание.
+```
 
-### Visual/status requirement
+### 3. No economy changes
 
-If the worker has assignment `"Idle"`:
+This task must not change resources.
 
-* the worker should still be visible as `Житель лагеря`;
-* optionally update the prompt `ObjectText` or message, but keep it simple;
-* do not create a complex UI.
+Talking to the worker must not:
 
-## Restore behavior
+* add Gold;
+* add Wood;
+* add Stone;
+* add Metal;
+* add MetalIngot;
+* add MetalParts;
+* spend any resources;
+* start any production;
+* start timers;
+* create loops;
+* generate passive income.
+
+### 4. Restore behavior
 
 On Stop -> Play:
 
 * `WorkerAssignments` should persist;
-* the worker should restore as before (Phase 2.2 behavior unchanged);
-* talking to the worker should show the already-assigned message
-  (`Житель лагеря: текущее задание — ожидание.`).
+* `CampWorker_BanditCamp_01` should restore as before;
+* talking to the worker after restart should show the already-assigned message if assignment exists:
 
-## Server-authoritative rules
+```text
+Житель лагеря: текущее задание — ожидание.
+```
 
-All state must be changed on the server:
+### 5. Visual/status behavior
 
-* the client may only trigger the `ProximityPrompt`;
-* the server validates the profile;
-* the server writes the assignment;
-* the server sends the player message;
+Keep the worker visual simple:
+
+* worker remains visible as `Житель лагеря`;
+* no complex UI;
+* no job selection menu;
+* no production visuals;
+* optional: update internal attributes or comments if useful, but do not add large systems.
+
+### 6. Server-authoritative rules
+
+All state must remain server-authoritative:
+
+* the client only triggers `ProximityPrompt`;
+* the server validates the player profile;
+* the server writes `WorkerAssignments`;
+* the server sends player messages;
 * no client-provided state should be trusted.
 
-## Duplication protection
+### 7. Duplication protection
+
+Ensure:
 
 * no duplicate workers;
 * no duplicate prompts;
-* repeated prompt use should not duplicate state (idempotent assignment);
-* repeated restore should not duplicate visuals.
+* repeated prompt use does not duplicate state;
+* repeated restore calls do not duplicate visuals;
+* repeated assignment attempts do not rewrite or multiply state unnecessarily.
+
+## Diagnostic logs
+
+Add clear logs similar to existing style:
+
+* `[CombatService] PlayerName assigned camp worker at BanditCamp_01 to Idle.`
+* `[CombatService] PlayerName checked camp worker assignment at BanditCamp_01: Idle.`
+
+Avoid noisy logs on every frame or repeated harmless restore.
 
 ## Do not touch
 
@@ -158,19 +202,23 @@ Do not change:
 * `default.project.json`
 * Rojo mapping
 * `src/Workspace`
-* avatar/R15/R6/player rig settings
+* R15/R6/avatar/player rig/avatar settings
 * unrelated services
-* forge/storage/workshop/house logic
-* resource gathering
+* forge logic
+* storage logic
+* workshop logic
+* house logic
+* resource gathering logic
 * combat balance
 * passive income
 * timed production
 * full worker automation
-* jobs/professions beyond the placeholder
+* jobs/professions beyond this placeholder
+* town systems
 * classes
 * backpack
 * food/fatigue
-* town systems
+* advanced combat
 
 ## Conflict marker check
 
@@ -191,23 +239,47 @@ At the end, provide:
 3. short explanation of what changed;
 4. diff summary;
 5. Roblox Studio test checklist;
-6. risks / manual verification notes.
+6. risks or things to verify manually.
 
 Do not create a PR unless explicitly asked.
 
 ## Roblox Studio test checklist
 
 1. Start Play with a profile where `CampWorker_BanditCamp_01` exists.
-2. Talk to the worker.
-3. Confirm message:
-   * `Житель назначен в лагерь. Задания появятся позже.`
-4. Confirm resources do not change.
-5. Talk to the worker again.
-6. Confirm message:
-   * `Житель лагеря: текущее задание — ожидание.`
-7. Stop -> Play.
-8. Talk to the worker again.
-9. Confirm the assignment persisted and the already-assigned message appears.
-10. Confirm no duplicate workers or prompts.
-11. Confirm no passive resources are generated.
-12. Confirm no Output errors.
+
+2. Record current resources:
+
+   * Gold
+   * Wood
+   * Stone
+   * Metal
+   * MetalIngot
+   * MetalParts
+
+3. Talk to the worker.
+
+4. Confirm message appears:
+
+   `Житель назначен в лагерь. Задания появятся позже.`
+
+5. Confirm resources did not change.
+
+6. Talk to the worker again.
+
+7. Confirm message appears:
+
+   `Житель лагеря: текущее задание — ожидание.`
+
+8. Confirm resources still did not change.
+
+9. Stop -> Play.
+
+10. Talk to the worker again.
+
+11. Confirm assignment persisted and the already-assigned message appears:
+
+`Житель лагеря: текущее задание — ожидание.`
+
+12. Confirm no duplicate workers or prompts.
+13. Confirm no passive resources are generated over time.
+14. Confirm no Output errors.
