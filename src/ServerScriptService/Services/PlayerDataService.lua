@@ -121,6 +121,7 @@ local function createDefaultProfile(player)
 		CapturedCamps = {},
 		CampOutposts = {},
 		JoinedNPCs = {},
+		WorkerAssignments = {},
 		CurrentQuestId = nil,
 		CompletedQuests = {},
 		QuestProgress = {},
@@ -483,6 +484,11 @@ local function normalizeLoadedProfile(player, savedProfile)
 		profile.JoinedNPCs = copyTable(savedProfile.JoinedNPCs)
 	end
 
+	-- Старые сейвы без WorkerAssignments безопасно остаются с дефолтным пустым {}.
+	if type(savedProfile.WorkerAssignments) == "table" then
+		profile.WorkerAssignments = copyTable(savedProfile.WorkerAssignments)
+	end
+
 	profile.ResourceZones = normalizeResourceZones(savedProfile.ResourceZones, savedProfile.ResourceAreas)
 	profile.ForestZoneState = normalizeForestZoneState(savedProfile, profile)
 	profile.ForestZoneClearedObjects = normalizeForestZoneClearedObjects(savedProfile, profile)
@@ -510,6 +516,7 @@ local function createSaveData(profile)
 		CapturedCamps = copyTable(profile.CapturedCamps),
 		CampOutposts = copyTable(profile.CampOutposts),
 		JoinedNPCs = copyTable(profile.JoinedNPCs),
+		WorkerAssignments = copyTable(profile.WorkerAssignments),
 		CurrentQuestId = profile.CurrentQuestId,
 		CompletedQuests = copyTable(profile.CompletedQuests),
 		QuestProgress = copyTable(profile.QuestProgress),

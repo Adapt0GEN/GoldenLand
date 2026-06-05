@@ -590,12 +590,42 @@ local function createRescuedNPCModel(camp)
 	return model
 end
 
--- Разговор с работником лагеря: чисто информационное взаимодействие. Ничего не
--- начисляет, не списывает и не меняет экономику — это только заглушка под будущую
--- автоматизацию. Server-authoritative: сообщение шлёт сервер.
+-- Разговор с работником лагеря: назначает простое сохранённое placeholder-задание
+-- ("Idle") по id лагеря. Ничего не начисляет, не списывает и не меняет экономику,
+-- не запускает производство, таймеры или циклы — это только заглушка состояния под
+-- будущую автоматизацию. Server-authoritative: сервер проверяет профиль, пишет
+-- WorkerAssignments и шлёт сообщение; клиент только триггерит ProximityPrompt.
 local function onTalkToCampWorker(player, camp)
-	sendPlayerMessage(player, "Житель ждёт поручений. Автоматизация будет доступна позже.")
-	print(string.format("[CombatService] %s talked to camp worker at %s.", player.Name, camp.Id))
+	local profile = PlayerDataService.GetProfile(player)
+
+	if not profile then
+		return
+	end
+
+	profile.WorkerAssignments = profile.WorkerAssignments or {}
+
+	-- Задание уже есть: не дублируем состояние, только сообщаем текущий статус.
+	if profile.WorkerAssignments[camp.Id] then
+		sendPlayerMessage(player, "Житель лагеря: текущее задание — ожидание.")
+		print(string.format(
+			"[CombatService] %s checked camp worker assignment at %s: %s.",
+			player.Name,
+			camp.Id,
+			tostring(profile.WorkerAssignments[camp.Id])
+		))
+		return
+	end
+
+	-- Первое назначение: ставим placeholder-роль, помечаем профиль грязным и сохраняем.
+	profile.WorkerAssignments[camp.Id] = "Idle"
+	PlayerDataService.MarkDirty(player)
+
+	if PlayerDataService.SaveProfile then
+		PlayerDataService.SaveProfile(player)
+	end
+
+	sendPlayerMessage(player, "Житель назначен в лагерь. Задания появятся позже.")
+	print(string.format("[CombatService] %s assigned camp worker at %s to Idle.", player.Name, camp.Id))
 end
 
 -- Создаёт дружелюбного работника лагеря (тело + голова + тег + статус-промпт) у
