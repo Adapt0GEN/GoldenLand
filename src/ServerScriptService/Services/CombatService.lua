@@ -10,10 +10,10 @@
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local Debris = game:GetService("Debris")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CurrencyService = require(script.Parent.CurrencyService)
 local PlayerDataService = require(script.Parent.PlayerDataService)
+local RemoteService = require(script.Parent.RemoteService)
 
 local CombatService = {}
 
@@ -114,12 +114,7 @@ local function createPart(name, size, position, color, parent)
 end
 
 local function sendPlayerMessage(player, message)
-	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-	local event = remotes and remotes:FindFirstChild("PlayerMessageEvent")
-
-	if event then
-		event:FireClient(player, message)
-	end
+	RemoteService.SendPlayerMessage(player, message)
 end
 
 local function getEnemiesFolder()

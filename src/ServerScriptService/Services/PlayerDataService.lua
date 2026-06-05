@@ -3,7 +3,8 @@
 
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local RemoteService = require(script.Parent.RemoteService)
 
 local PlayerDataService = {}
 
@@ -79,26 +80,6 @@ end
 
 local function createDefaultResourceZones()
 	return copyTable(DEFAULT_RESOURCE_ZONES)
-end
-
-local function getRemoteEvent(eventName)
-	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-
-	if not remotes then
-		remotes = Instance.new("Folder")
-		remotes.Name = "Remotes"
-		remotes.Parent = ReplicatedStorage
-	end
-
-	local remoteEvent = remotes:FindFirstChild(eventName)
-
-	if not remoteEvent then
-		remoteEvent = Instance.new("RemoteEvent")
-		remoteEvent.Name = eventName
-		remoteEvent.Parent = remotes
-	end
-
-	return remoteEvent
 end
 
 local function createDefaultProfile(player)
@@ -686,7 +667,7 @@ function PlayerDataService.SendProfileUpdate(player)
 		return false
 	end
 
-	getRemoteEvent("PlayerStatsUpdateEvent"):FireClient(player, publicProfile)
+	RemoteService.GetRemoteEvent("PlayerStatsUpdateEvent"):FireClient(player, publicProfile)
 	print(string.format(
 		"[PlayerDataService] Sent stats update: Gold=%d Wood=%d Stone=%d Metal=%d MetalIngot=%d MetalParts=%d House=%d Storage=%d ToolKitLevel=%d Forge=%d",
 		publicProfile.Gold,

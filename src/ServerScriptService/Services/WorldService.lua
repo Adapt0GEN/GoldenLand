@@ -2,10 +2,10 @@
 -- Создаёт простую стартовую сцену и визуальные ориентиры мира.
 
 local Workspace = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PlayerDataService = require(script.Parent.PlayerDataService)
 local ResourceService = require(script.Parent.ResourceService)
+local RemoteService = require(script.Parent.RemoteService)
 
 local WorldService = {}
 
@@ -129,28 +129,8 @@ local function getWorldRoot()
 	return worldRoot
 end
 
-local function getRemoteEvent(eventName)
-	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-
-	if not remotes then
-		remotes = Instance.new("Folder")
-		remotes.Name = "Remotes"
-		remotes.Parent = ReplicatedStorage
-	end
-
-	local remoteEvent = remotes:FindFirstChild(eventName)
-
-	if not remoteEvent then
-		remoteEvent = Instance.new("RemoteEvent")
-		remoteEvent.Name = eventName
-		remoteEvent.Parent = remotes
-	end
-
-	return remoteEvent
-end
-
 local function sendPlayerMessage(player, message)
-	getRemoteEvent("PlayerMessageEvent"):FireClient(player, message)
+	RemoteService.SendPlayerMessage(player, message)
 end
 
 local function removeBlockedPath()

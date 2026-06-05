@@ -1,10 +1,9 @@
 -- QuestService
 -- Ведёт простые квесты, прогресс целей и выдачу наград.
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
 local PlayerDataService = require(script.Parent.PlayerDataService)
 local CurrencyService = require(script.Parent.CurrencyService)
+local RemoteService = require(script.Parent.RemoteService)
 
 local QuestService = {}
 
@@ -38,26 +37,6 @@ QuestService.Quests = {
 		},
 	},
 }
-
-local function getQuestUpdateEvent()
-	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-
-	if not remotes then
-		remotes = Instance.new("Folder")
-		remotes.Name = "Remotes"
-		remotes.Parent = ReplicatedStorage
-	end
-
-	local questUpdateEvent = remotes:FindFirstChild("QuestUpdateEvent")
-
-	if not questUpdateEvent then
-		questUpdateEvent = Instance.new("RemoteEvent")
-		questUpdateEvent.Name = "QuestUpdateEvent"
-		questUpdateEvent.Parent = remotes
-	end
-
-	return questUpdateEvent
-end
 
 local function getQuest(questId)
 	local quest = QuestService.Quests[questId]
@@ -117,7 +96,7 @@ local function sendQuestUpdate(player, questId, objectiveId, status)
 	local required = getObjectiveTarget(quest, objectiveId) or 0
 	local current = QuestService.GetQuestProgress(player, questId, objectiveId)
 
-	getQuestUpdateEvent():FireClient(player, {
+	RemoteService.GetRemoteEvent("QuestUpdateEvent"):FireClient(player, {
 		questId = questId,
 		title = quest.Name,
 		objectiveText = quest.ObjectiveText,

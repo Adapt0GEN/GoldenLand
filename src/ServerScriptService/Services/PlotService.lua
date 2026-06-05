@@ -1,11 +1,11 @@
 -- PlotService
 -- Тестовый участок, визуальное развитие дома и платное улучшение.
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local PlayerDataService = require(script.Parent.PlayerDataService)
 local CurrencyService = require(script.Parent.CurrencyService)
 local QuestService = require(script.Parent.QuestService)
+local RemoteService = require(script.Parent.RemoteService)
 
 local PlotService = {}
 
@@ -105,32 +105,12 @@ local HOUSE_UPGRADE_COSTS = {
 	},
 }
 
-local function getRemoteEvent(eventName)
-	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-
-	if not remotes then
-		remotes = Instance.new("Folder")
-		remotes.Name = "Remotes"
-		remotes.Parent = ReplicatedStorage
-	end
-
-	local remoteEvent = remotes:FindFirstChild(eventName)
-
-	if not remoteEvent then
-		remoteEvent = Instance.new("RemoteEvent")
-		remoteEvent.Name = eventName
-		remoteEvent.Parent = remotes
-	end
-
-	return remoteEvent
-end
-
 local function sendPlayerMessage(player, message)
-	getRemoteEvent("PlayerMessageEvent"):FireClient(player, message)
+	RemoteService.SendPlayerMessage(player, message)
 end
 
 local function sendActionPreview(player, previewData)
-	getRemoteEvent("ActionPreviewEvent"):FireClient(player, previewData)
+	RemoteService.GetRemoteEvent("ActionPreviewEvent"):FireClient(player, previewData)
 end
 
 local function getPlotName(player)
@@ -2678,6 +2658,6 @@ local function handleActionPreviewRequest(player, request)
 	end
 end
 
-getRemoteEvent("ActionPreviewEvent").OnServerEvent:Connect(handleActionPreviewRequest)
+RemoteService.GetRemoteEvent("ActionPreviewEvent").OnServerEvent:Connect(handleActionPreviewRequest)
 
 return PlotService

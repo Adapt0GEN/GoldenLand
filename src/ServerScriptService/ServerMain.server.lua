@@ -2,34 +2,15 @@
 -- Точка входа для первого RPG-прототипа сервисного ядра GoldenLand.
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local function ensureRemoteEvent(eventName)
-	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-
-	if not remotes then
-		remotes = Instance.new("Folder")
-		remotes.Name = "Remotes"
-		remotes.Parent = ReplicatedStorage
-	end
-
-	local remoteEvent = remotes:FindFirstChild(eventName)
-
-	if not remoteEvent then
-		remoteEvent = Instance.new("RemoteEvent")
-		remoteEvent.Name = eventName
-		remoteEvent.Parent = remotes
-	end
-
-	return remoteEvent
-end
-
-ensureRemoteEvent("QuestUpdateEvent")
-ensureRemoteEvent("PlayerStatsUpdateEvent")
-ensureRemoteEvent("PlayerMessageEvent")
-ensureRemoteEvent("ActionPreviewEvent")
 
 local Services = script.Parent.Services
+local RemoteService = require(Services.RemoteService)
+
+RemoteService.EnsureRemoteEvent("QuestUpdateEvent")
+RemoteService.EnsureRemoteEvent("PlayerStatsUpdateEvent")
+RemoteService.EnsureRemoteEvent("PlayerMessageEvent")
+RemoteService.EnsureRemoteEvent("ActionPreviewEvent")
+
 local PlayerDataService = require(Services.PlayerDataService)
 local PlotService = require(Services.PlotService)
 local WorldService = require(Services.WorldService)

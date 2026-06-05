@@ -2,12 +2,12 @@
 -- Dev-only chat commands for quickly setting test resources and progression.
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local PlayerDataService = require(script.Parent.PlayerDataService)
 local CurrencyService = require(script.Parent.CurrencyService)
 local PlotService = require(script.Parent.PlotService)
+local RemoteService = require(script.Parent.RemoteService)
 
 local AdminService = {}
 
@@ -51,28 +51,8 @@ local RESOURCE_SET_ALL_NAMES = {
 	"MetalParts",
 }
 
-local function getRemoteEvent(eventName)
-	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-
-	if not remotes then
-		remotes = Instance.new("Folder")
-		remotes.Name = "Remotes"
-		remotes.Parent = ReplicatedStorage
-	end
-
-	local remoteEvent = remotes:FindFirstChild(eventName)
-
-	if not remoteEvent then
-		remoteEvent = Instance.new("RemoteEvent")
-		remoteEvent.Name = eventName
-		remoteEvent.Parent = remotes
-	end
-
-	return remoteEvent
-end
-
 local function sendPlayerMessage(player, message)
-	getRemoteEvent("PlayerMessageEvent"):FireClient(player, message)
+	RemoteService.SendPlayerMessage(player, message)
 end
 
 local function isAdmin(player)
