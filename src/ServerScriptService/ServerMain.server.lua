@@ -19,6 +19,12 @@ local ResourceService = require(Services.ResourceService)
 local AdminService = require(Services.AdminService)
 local CombatService = require(Services.CombatService)
 
+-- Связываем перерисовку визуала леса: ResourceService запрашивает обновление,
+-- WorldService владеет визуалом. Так ResourceService не требует WorldService напрямую.
+ResourceService.SetForestVisualUpdateCallback(function(player)
+	WorldService.UpdateForestAreaVisual(player)
+end)
+
 -- Порядок старта мира: сначала сцена, затем NPC и ресурсы.
 WorldService.CreateStartWorld()
 NPCService.CreateVillageElder()

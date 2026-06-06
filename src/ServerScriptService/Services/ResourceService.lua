@@ -526,6 +526,23 @@ local function canHarvestForestArea(player)
 	return true
 end
 
+-- Колбэк перерисовки визуала леса. Регистрируется из ServerMain.
+-- ResourceService больше не требует WorldService напрямую — он лишь запрашивает
+-- обновление визуала, а владельцем визуала остаётся WorldService.
+local forestVisualUpdateCallback = nil
+
+function ResourceService.SetForestVisualUpdateCallback(callback)
+	forestVisualUpdateCallback = callback
+end
+
+-- Запрашивает перерисовку визуала леса, если колбэк зарегистрирован.
+-- Ничего не мутирует и не меняет состояние ресурсов; безопасно при отсутствии колбэка.
+local function requestForestVisualUpdate(player)
+	if forestVisualUpdateCallback then
+		forestVisualUpdateCallback(player)
+	end
+end
+
 local function mineForestStone(player, stoneModel, prompt)
 	if not canUseForestResources(player) then
 		return
@@ -557,8 +574,7 @@ local function mineForestStone(player, stoneModel, prompt)
 		setForestResourceAvailable(stoneModel, prompt, false)
 		updateForestAreaLocationState(player, profile)
 
-		local WorldService = require(script.Parent.WorldService)
-		WorldService.UpdateForestAreaVisual(player)
+		requestForestVisualUpdate(player)
 		return
 	end
 
@@ -580,8 +596,7 @@ local function mineForestStone(player, stoneModel, prompt)
 	PlayerDataService.MarkDirty(player)
 	updateForestAreaLocationState(player, profile)
 
-	local WorldService = require(script.Parent.WorldService)
-	WorldService.UpdateForestAreaVisual(player)
+	requestForestVisualUpdate(player)
 end
 
 local function createTree(index, position, parent)
@@ -1020,8 +1035,7 @@ function ResourceService.HarvestForestArea(player)
 	if forestZone.State == "Empty" then
 		print(string.format("[ResourceService] ForestArea_01 is Empty; gather blocked for %s", player.Name))
 
-		local WorldService = require(script.Parent.WorldService)
-		WorldService.UpdateForestAreaVisual(player)
+		requestForestVisualUpdate(player)
 		return false
 	end
 
@@ -1032,8 +1046,7 @@ function ResourceService.HarvestForestArea(player)
 		PlayerDataService.MarkDirty(player)
 		updateForestAreaLocationState(player, profile)
 
-		local WorldService = require(script.Parent.WorldService)
-		WorldService.UpdateForestAreaVisual(player)
+		requestForestVisualUpdate(player)
 		return false
 	end
 
@@ -1057,8 +1070,7 @@ function ResourceService.HarvestForestArea(player)
 	PlayerDataService.MarkDirty(player)
 	updateForestAreaLocationState(player, profile)
 
-	local WorldService = require(script.Parent.WorldService)
-	WorldService.UpdateForestAreaVisual(player)
+	requestForestVisualUpdate(player)
 
 	if PlayerDataService.SendProfileUpdate then
 		PlayerDataService.SendProfileUpdate(player)
