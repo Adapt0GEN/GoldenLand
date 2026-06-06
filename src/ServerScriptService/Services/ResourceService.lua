@@ -447,6 +447,36 @@ local function ensureForestAreaZone(profile)
 	return forestZone
 end
 
+-- Единое правило вывода состояния лесной зоны. Не мутирует профиль.
+-- Источник истины — данные ResourceZones.ForestArea_01, плюс гейт ForestUnlocked.
+-- profile.ForestZoneState == "Empty" остаётся запасным вариантом для старых сейвов.
+local function deriveForestZoneState(profile)
+	if type(profile) ~= "table" then
+		return "Locked"
+	end
+
+	if profile.ForestUnlocked ~= true then
+		return "Locked"
+	end
+
+	local forestArea = profile.ResourceZones and profile.ResourceZones[FOREST_AREA_ID]
+
+	if type(forestArea) == "table" and forestArea.State == "Empty" then
+		return "Empty"
+	end
+
+	if profile.ForestZoneState == "Empty" then
+		return "Empty"
+	end
+
+	return "Active"
+end
+
+-- Публичное read-only получение состояния лесной зоны. Профиль не меняется.
+function ResourceService.GetForestZoneState(profile)
+	return deriveForestZoneState(profile)
+end
+
 local function updateForestAreaLocationState(player, profile)
 	profile = profile or PlayerDataService.GetProfile(player)
 
@@ -469,7 +499,7 @@ local function updateForestAreaLocationState(player, profile)
 	forestZone.State = if hasActiveObject then "Active" else "Empty"
 	forestZone.RemainingActions = forestZone.Objects.ForestTreeCluster.RemainingActions or 0
 	syncForestZoneClearedObjects(profile, forestZone)
-	profile.ForestZoneState = if profile.ForestUnlocked == true then forestZone.State else "Locked"
+	profile.ForestZoneState = deriveForestZoneState(profile)
 
 	if forestZone.State ~= previousState or profile.ForestZoneState ~= previousForestZoneState then
 		PlayerDataService.MarkDirty(player)

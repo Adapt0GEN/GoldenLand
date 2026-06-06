@@ -498,18 +498,6 @@ local function createForestZoneVisualForState(forestZone, state, visualStage, tr
 	print(string.format("[WorldService] Created ForestZone VisualStateObjects for state: %s", visualStateName))
 end
 
-local function getForestZoneState(profile)
-	if profile.ForestUnlocked ~= true then
-		return "Locked"
-	end
-
-	if profile.ForestZoneState == "Empty" then
-		return "Empty"
-	end
-
-	return "Active"
-end
-
 local function createLegacyForestAreaStage(parent, stageName, treeCount)
 	local stage = Instance.new("Model")
 	stage.Name = string.format("%s_%s", FOREST_AREA_ID, stageName)
@@ -893,7 +881,7 @@ function WorldService.TryClearForestPath(player)
 	end
 
 	if profile.ForestUnlocked == true then
-		profile.ForestZoneState = getForestZoneState(profile)
+		ResourceService.UpdateForestAreaLocationState(player)
 		print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, profile.ForestZoneState))
 		removeBlockedPath()
 		ResourceService.CreateForestZoneResources(createForestZone(profile.ForestZoneState), true, profile)
@@ -908,8 +896,9 @@ function WorldService.TryClearForestPath(player)
 	end
 
 	profile.ForestUnlocked = true
-	profile.ForestZoneState = "Active"
 	profile.ForestZoneClearedObjects = profile.ForestZoneClearedObjects or {}
+	-- Состояние зоны пишет только ResourceService; здесь оно выводится после установки ForestUnlocked.
+	ResourceService.UpdateForestAreaLocationState(player)
 	PlayerDataService.MarkDirty(player)
 	removeBlockedPath()
 	print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, profile.ForestZoneState))
@@ -980,14 +969,13 @@ function WorldService.UpdateForestAccessForPlayer(player)
 	end
 
 	if profile.ForestUnlocked == true then
-		profile.ForestZoneState = getForestZoneState(profile)
+		ResourceService.UpdateForestAreaLocationState(player)
 		print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, profile.ForestZoneState))
 		removeBlockedPath()
 		ResourceService.CreateForestZoneResources(createForestZone(profile.ForestZoneState), true, profile)
 		WorldService.UpdateForestAreaVisual(player)
 	else
-		profile.ForestZoneState = "Locked"
-		print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, profile.ForestZoneState))
+		print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, ResourceService.GetForestZoneState(profile)))
 		createBlockedPathToForest()
 	end
 
@@ -1048,13 +1036,14 @@ function WorldService.UpdateForestAreaVisual(player)
 	end
 
 	local forestResources = ensureForestZoneResourcesFolder(forestZone)
-	profile.ForestZoneState = getForestZoneState(profile)
-	print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, profile.ForestZoneState))
+	-- Только чтение состояния; запись принадлежит ResourceService.
+	local forestZoneState = ResourceService.GetForestZoneState(profile)
+	print(string.format("[WorldService] ForestZone state for %s: %s", player.Name, forestZoneState))
 
 	local resourceZones = profile.ResourceZones or {}
 	local forestAreaData = resourceZones[FOREST_AREA_ID] or {}
 	local visualStage, treeCount = getForestAreaVisualStage(forestAreaData)
-	createForestZoneVisualForState(forestZone, profile.ForestZoneState, visualStage, treeCount)
+	createForestZoneVisualForState(forestZone, forestZoneState, visualStage, treeCount)
 
 	local forestArea = createForestAreaVisual(forestResources)
 	local objects = forestAreaData.Objects or {}
