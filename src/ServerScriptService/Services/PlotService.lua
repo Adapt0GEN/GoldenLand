@@ -6,6 +6,7 @@ local PlayerDataService = require(script.Parent.PlayerDataService)
 local CurrencyService = require(script.Parent.CurrencyService)
 local QuestService = require(script.Parent.QuestService)
 local RemoteService = require(script.Parent.RemoteService)
+local ForgeRules = require(script.Parent.ForgeRules)
 
 local PlotService = {}
 
@@ -17,7 +18,6 @@ local PLOT_SPACING = 1500
 local PLOT_SIZE = Vector3.new(40, 1, 40)
 local MAX_HOUSE_LEVEL = 3
 local MAX_STORAGE_LEVEL = 2
-local MAX_FORGE_LEVEL = 2
 local STORAGE_QUEST_ID = "build_storage"
 local STORAGE_OBJECTIVE_ID = "storage_built"
 local STORAGE_BUILD_COST = {
@@ -39,43 +39,6 @@ local WORKSHOP_BUILD_COST = {
 	Gold = 25,
 	Wood = 15,
 	Stone = 10,
-}
-
-local FORGE_BUILD_COST = {
-	Gold = 10,
-	Wood = 20,
-	Stone = 30,
-	Metal = 15,
-}
-
-local FORGE_LEVEL_2_COST = {
-	Gold = 25,
-	Wood = 20,
-	Stone = 20,
-	Metal = 15,
-	MetalIngot = 5,
-	MetalParts = 3,
-}
-
-local FORGE_SMELT_RECIPES = {
-	[1] = {
-		Cost = {
-			Metal = 5,
-		},
-		MetalIngotReward = 1,
-		Description = "Металл 5 -> слиток 1",
-	},
-	[2] = {
-		Cost = {
-			Metal = 8,
-		},
-		MetalIngotReward = 2,
-		Description = "Металл 8 -> слитки 2",
-	},
-}
-
-local FORGE_PARTS_COST = {
-	MetalIngot = 2,
 }
 
 local TOOL_KIT_I_COST = {
@@ -269,10 +232,6 @@ local function buildActionPreview(player, title, description, cost)
 	}
 end
 
-local function getForgeSmeltRecipe(forgeLevel)
-	return FORGE_SMELT_RECIPES[forgeLevel]
-end
-
 local function buildHouseUpgradePreview(player)
 	local profile = PlayerDataService.GetProfile(player)
 
@@ -334,7 +293,7 @@ local function buildForgePreview(player)
 		player,
 		"Строительство кузницы",
 		"Кузница: уровень 0 -> 1",
-		FORGE_BUILD_COST
+		ForgeRules.GetBuildCost()
 	)
 end
 
@@ -350,14 +309,14 @@ local function buildForgeUpgradePreview(player)
 		player,
 		"Forge upgrade",
 		string.format("Forge: level %d -> %d", forgeLevel, forgeLevel + 1),
-		FORGE_LEVEL_2_COST
+		ForgeRules.GetLevel2Cost()
 	)
 end
 
 local function buildForgeSmeltPreview(player)
 	local profile = PlayerDataService.GetProfile(player)
 	local forgeLevel = if profile then PlayerDataService.GetBuildingLevel(profile, "Forge") else 0
-	local recipe = getForgeSmeltRecipe(forgeLevel)
+	local recipe = ForgeRules.GetSmeltRecipe(forgeLevel)
 
 	if not profile or not recipe then
 		return nil
@@ -388,7 +347,7 @@ local function buildForgePartsPreview(player)
 		player,
 		"Производство деталей",
 		"Слитки 2 -> детали 1",
-		FORGE_PARTS_COST
+		ForgeRules.GetPartsCost()
 	)
 end
 
@@ -2008,25 +1967,7 @@ function PlotService.TryUpgradeStorage(player)
 end
 
 function PlotService.CanBuildForge(player)
-	local profile = PlayerDataService.GetProfile(player)
-
-	if not profile then
-		return false, "профиль не найден"
-	end
-
-	if not profile.PlotUnlocked then
-		return false, "участок еще не открыт"
-	end
-
-	if PlayerDataService.GetBuildingLevel(profile, "Forge") >= 1 then
-		return false, "кузница уже построена"
-	end
-
-	if not CurrencyService.CanAfford(player, FORGE_BUILD_COST) then
-		return false, "не хватает ресурсов", FORGE_BUILD_COST, CurrencyService.FormatMissingResources(player, FORGE_BUILD_COST)
-	end
-
-	return true, "можно построить", FORGE_BUILD_COST
+	return ForgeRules.CanBuildForge(player)
 end
 
 function PlotService.TryBuildForge(player)
@@ -2091,27 +2032,7 @@ function PlotService.TryBuildForge(player)
 end
 
 function PlotService.CanUpgradeForge(player)
-	local profile = PlayerDataService.GetProfile(player)
-
-	if not profile then
-		return false, "profile not found"
-	end
-
-	local forgeLevel = PlayerDataService.GetBuildingLevel(profile, "Forge")
-
-	if forgeLevel < 1 then
-		return false, "forge not built"
-	end
-
-	if forgeLevel >= MAX_FORGE_LEVEL then
-		return false, "forge already upgraded"
-	end
-
-	if not CurrencyService.CanAfford(player, FORGE_LEVEL_2_COST) then
-		return false, "not enough resources", FORGE_LEVEL_2_COST, CurrencyService.FormatMissingResources(player, FORGE_LEVEL_2_COST)
-	end
-
-	return true, "can upgrade", FORGE_LEVEL_2_COST, nil, forgeLevel + 1
+	return ForgeRules.CanUpgradeForge(player)
 end
 
 function PlotService.TryUpgradeForge(player)
@@ -2177,24 +2098,7 @@ function PlotService.TryUpgradeForge(player)
 end
 
 function PlotService.CanSmeltMetalIngot(player)
-	local profile = PlayerDataService.GetProfile(player)
-
-	if not profile then
-		return false, "profile not found"
-	end
-
-	local forgeLevel = PlayerDataService.GetBuildingLevel(profile, "Forge")
-	local recipe = getForgeSmeltRecipe(forgeLevel)
-
-	if not recipe then
-		return false, "forge not built"
-	end
-
-	if not CurrencyService.CanAfford(player, recipe.Cost) then
-		return false, "not enough resources", recipe.Cost, CurrencyService.FormatMissingResources(player, recipe.Cost)
-	end
-
-	return true, "can smelt", recipe.Cost, nil, recipe.MetalIngotReward
+	return ForgeRules.CanSmeltMetalIngot(player)
 end
 
 function PlotService.TrySmeltMetalIngot(player)
@@ -2245,21 +2149,7 @@ function PlotService.TrySmeltMetalIngot(player)
 end
 
 function PlotService.CanMakeMetalParts(player)
-	local profile = PlayerDataService.GetProfile(player)
-
-	if not profile then
-		return false, "profile not found"
-	end
-
-	if PlayerDataService.GetBuildingLevel(profile, "Forge") < 1 then
-		return false, "forge not built"
-	end
-
-	if not CurrencyService.CanAfford(player, FORGE_PARTS_COST) then
-		return false, "not enough resources", FORGE_PARTS_COST, CurrencyService.FormatMissingResources(player, FORGE_PARTS_COST)
-	end
-
-	return true, "can make parts", FORGE_PARTS_COST
+	return ForgeRules.CanMakeMetalParts(player)
 end
 
 function PlotService.TryMakeMetalParts(player)
