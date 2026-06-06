@@ -1,5 +1,19 @@
 # Phase 2.3 — Camp worker job assignment placeholder
 
+> **STATUS: COMPLETED.** The `WorkerAssignments` placeholder described below is
+> implemented and tested. The worker-assignment runtime logic now lives in
+> `CampNPCService` (extracted from `CombatService`). The architecture
+> decomposition (see `docs/planning/17_service_ownership_map.md`, section 7) is
+> also complete.
+>
+> **Next recommended task:** documentation review pass over
+> `docs/05_current_state.md` and `docs/planning/17_service_ownership_map.md`,
+> then pick the next gameplay/MVP step from the master plan in
+> `docs/planning/16_assessment_and_master_plan.md`. Do not start a new large
+> gameplay system without a dedicated task spec.
+>
+> The original Phase 2.3 spec is kept below for reference.
+
 ## Current context
 
 GoldenLand is a Roblox/Rojo single-player MVP.
