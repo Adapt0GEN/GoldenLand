@@ -38,22 +38,58 @@ local DUMMY_MAX_HEALTH = 100
 local DUMMY_RESPAWN_DELAY = 5
 local DUMMY_GOLD_REWARD = 10
 
--- Враждебный лагерь.
-local HOSTILE_CAMP = {
-	Id = "BanditCamp_01",
-	DisplayName = "Враждебный лагерь",
-	CapturedName = "Освобождённая земля",
-	-- Центр на земле (Y = 0) и далеко от личного участка игрока, чтобы не перекрываться.
-	Center = Vector3.new(0, 0, -95),
-	Enemies = {
-		{ Suffix = "Guard_1", Offset = Vector3.new(-7, 0, -5), MaxHealth = 80, GoldReward = 15 },
-		{ Suffix = "Guard_2", Offset = Vector3.new(7, 0, -6), MaxHealth = 80, GoldReward = 15 },
-		{ Suffix = "Guard_3", Offset = Vector3.new(-5, 0, 7), MaxHealth = 100, GoldReward = 20 },
-		{ Suffix = "Leader", Offset = Vector3.new(6, 0, 6), MaxHealth = 140, GoldReward = 35, Color = Color3.fromRGB(90, 40, 70) },
+-- Враждебные лагеря.
+-- Каждый лагерь описывается своей camp-config таблицей с уникальным Id; все хелперы
+-- ниже (spawn / capture / outpost / restore) принимают camp как аргумент и уже
+-- camp-id-keyed, поэтому добавление второго лагеря не требует менять схему профиля,
+-- RemoteEvents, Rojo или CampNPCService. Профильные поля (CapturedCamps, CampOutposts,
+-- JoinedNPCs, WorkerAssignments) уже хранятся как таблицы по id лагеря.
+local HOSTILE_CAMPS = {
+	{
+		Id = "BanditCamp_01",
+		DisplayName = "Враждебный лагерь",
+		CapturedName = "Освобождённая земля",
+		-- Центр на земле (Y = 0) и далеко от личного участка игрока, чтобы не перекрываться.
+		Center = Vector3.new(0, 0, -95),
+		Enemies = {
+			{ Suffix = "Guard_1", Offset = Vector3.new(-7, 0, -5), MaxHealth = 80, GoldReward = 15 },
+			{ Suffix = "Guard_2", Offset = Vector3.new(7, 0, -6), MaxHealth = 80, GoldReward = 15 },
+			{ Suffix = "Guard_3", Offset = Vector3.new(-5, 0, 7), MaxHealth = 100, GoldReward = 20 },
+			{ Suffix = "Leader", Offset = Vector3.new(6, 0, 6), MaxHealth = 140, GoldReward = 35, Color = Color3.fromRGB(90, 40, 70) },
+		},
+		ClearBonusGold = 40,
+		OutpostOffset = Vector3.new(0, 0, 6),
 	},
-	ClearBonusGold = 40,
-	OutpostOffset = Vector3.new(0, 0, 6),
+	{
+		-- Второй захватываемый лагерь. Отдельная локация на +Z (зеркально BanditCamp_01),
+		-- тот же радиус от старта; не пересекается со спавном, личным участком (x≈80, z≈0),
+		-- BanditCamp_01 (z≈-95), ForestZone/RockZone (x отрицательный, z≈8) и манекеном (z=34).
+		Id = "BanditCamp_02",
+		DisplayName = "Враждебный лагерь 2",
+		CapturedName = "Освобождённая земля 2",
+		Center = Vector3.new(0, 0, 95),
+		-- Похожий, но не идентичный состав врагов: чуть прочнее и с другой раскладкой.
+		Enemies = {
+			{ Suffix = "Guard_1", Offset = Vector3.new(-6, 0, -6), MaxHealth = 90, GoldReward = 16 },
+			{ Suffix = "Guard_2", Offset = Vector3.new(6, 0, -6), MaxHealth = 90, GoldReward = 16 },
+			{ Suffix = "Guard_3", Offset = Vector3.new(0, 0, 8), MaxHealth = 110, GoldReward = 22 },
+			{ Suffix = "Leader", Offset = Vector3.new(0, 0, -2), MaxHealth = 160, GoldReward = 40, Color = Color3.fromRGB(80, 35, 80) },
+		},
+		ClearBonusGold = 50,
+		OutpostOffset = Vector3.new(0, 0, 6),
+	},
 }
+
+-- Быстрый доступ к camp-config по id лагеря (для capture/restore по campId).
+local function getCampById(campId)
+	for _, camp in ipairs(HOSTILE_CAMPS) do
+		if camp.Id == campId then
+			return camp
+		end
+	end
+
+	return nil
+end
 
 -- Не-боевой слой лагеря (спасённый житель RescuedNPC и работник CampWorker) вместе с
 -- их константами вынесен в CampNPCService. CombatService обращается к нему через
@@ -477,11 +513,17 @@ end
 local function onCampCleared(campId, attacker)
 	print(string.format("[CombatService] Camp %s cleared.", campId))
 
-	applyCapturedVisual(HOSTILE_CAMP)
+	local camp = getCampById(campId)
+
+	if not camp then
+		return
+	end
+
+	applyCapturedVisual(camp)
 
 	if attacker then
-		if HOSTILE_CAMP.Id == campId and HOSTILE_CAMP.ClearBonusGold > 0 then
-			CurrencyService.AddGold(attacker, HOSTILE_CAMP.ClearBonusGold)
+		if camp.ClearBonusGold > 0 then
+			CurrencyService.AddGold(attacker, camp.ClearBonusGold)
 		end
 
 		-- Сохраняем захват в профиль игрока, чтобы лагерь остался твоим после перезахода.
@@ -496,8 +538,8 @@ local function onCampCleared(campId, attacker)
 				PlayerDataService.SaveProfile(attacker)
 			end
 
-			showOutpostForProfile(HOSTILE_CAMP, profile)
-			CampNPCService.ShowRescuedNPCForProfile(HOSTILE_CAMP, profile, attacker)
+			showOutpostForProfile(camp, profile)
+			CampNPCService.ShowRescuedNPCForProfile(camp, profile, attacker)
 		end
 
 		sendPlayerMessage(attacker, "Лагерь зачищен! Земля теперь твоя.")
@@ -733,7 +775,10 @@ end
 function CombatService.Start()
 	weaponTemplate = createWeaponTemplate()
 	spawnTrainingDummy()
-	spawnHostileCamp(HOSTILE_CAMP)
+
+	for _, camp in ipairs(HOSTILE_CAMPS) do
+		spawnHostileCamp(camp)
+	end
 
 	Players.PlayerAdded:Connect(setupPlayer)
 
@@ -757,13 +802,15 @@ function CombatService.RestoreCampsForPlayer(player)
 		return
 	end
 
-	if profile.CapturedCamps[HOSTILE_CAMP.Id] then
-		campClearedFlags[HOSTILE_CAMP.Id] = true
-		removeCampEnemies(HOSTILE_CAMP.Id)
-		applyCapturedVisual(HOSTILE_CAMP)
-		showOutpostForProfile(HOSTILE_CAMP, profile)
-		CampNPCService.ShowRescuedNPCForProfile(HOSTILE_CAMP, profile, player)
-		print(string.format("[CombatService] Restored captured camp %s for %s.", HOSTILE_CAMP.Id, player.Name))
+	for _, camp in ipairs(HOSTILE_CAMPS) do
+		if profile.CapturedCamps[camp.Id] then
+			campClearedFlags[camp.Id] = true
+			removeCampEnemies(camp.Id)
+			applyCapturedVisual(camp)
+			showOutpostForProfile(camp, profile)
+			CampNPCService.ShowRescuedNPCForProfile(camp, profile, player)
+			print(string.format("[CombatService] Restored captured camp %s for %s.", camp.Id, player.Name))
+		end
 	end
 end
 
