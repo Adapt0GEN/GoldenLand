@@ -20,7 +20,9 @@ implemented, tested in Roblox Studio, and merged into `main`. The matrices below
 reflect the **post-decomposition** ownership: `RemoteService`, `ForgeRules`, and
 `CampNPCService` exist; `ForestZoneState` is single-writer at runtime; and the
 `ResourceService -> WorldService` lazy require has been replaced by a repaint
-callback wired in `ServerMain`.
+callback wired in `ServerMain`. A follow-up extract-only refactor also split
+`WorldService` world-building helpers into `Services/World/` modules — see
+section 8.
 
 ## 2. Current Architecture Notes
 
@@ -168,3 +170,24 @@ All five steps below are implemented, tested in Roblox Studio, and merged.
 **Note:** Steps 2 and 3 must **not** be done in the same task — consolidating
 the `ForestZoneState` writer and removing the lazy-require cycle are separate
 concerns and combining them would make the change hard to test and review.
+
+## 8. WorldService Helper Modules (`Services/World/`)
+
+`WorldService.lua` was split (extract-only, behavior preserved) from a large
+monolithic world-building file into a smaller public entry point plus dedicated
+helper modules under `src/ServerScriptService/Services/World/`. Ownership of the
+new modules:
+
+| Module | Responsibility | Notes / Rules |
+|---|---|---|
+| `WorldService.lua` | Public entry point for world creation and world access updates. Coordinates player-specific access restoration (forest/rock gates), keeps integration with player profile state and the resource/world access flow. | Stays the only public world API (`CreateStartWorld`, `UpdateForestAccessForPlayer`, `UpdateForestAreaVisual`, `TryClearForestPath`, `TryClearRockPass`). Reads `ForestZoneState`; does not write it. |
+| `WorldLayoutConfig.lua` | Static world layout constants: object/folder names, zone and area positions, common sizes/colors/materials and shared sets where applicable. | Pure data. No gameplay state, no profile access. |
+| `WorldPartFactory.lua` | Generic Part/Model/Folder creation helpers and basic visual properties (`createPart`, `createAreaMarker`, `createFlatMarker`, `ensureChildFolder`, `getWorldRoot`, `setModelVisible`). | Shared low-level world-object helpers. No zone-specific game logic. |
+| `WorldSignBuilder.lua` | Signs, labels, boards, and text markers (`createTextSign`). | Used for zone/area signage; depends only on the part factory. |
+| `WorldZoneBuilder.lua` | ForestZone and RockZone visual construction, forest visual states (Active/Empty/Cleared), and zone decorative objects. | Pure visual builders; no profile/resource state writes. |
+| `WorldPathBuilder.lua` | Blocked paths and pass objects (`BlockedPathToForest`, `RockPass`). | Prompt wiring is passed in via callbacks so the builder does not depend on `WorldService`. |
+
+**Rule for future map work:** extend these builders/configs (add positions to
+`WorldLayoutConfig`, add builder functions to the zone/path/sign modules) instead
+of adding large blocks of construction code back into `WorldService.lua`.
+`WorldService` should stay a thin public coordinator.

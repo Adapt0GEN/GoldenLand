@@ -1,238 +1,94 @@
-# Phase 2.3 — Camp worker job assignment placeholder
+# MVP 0.4.x — Initial Island Route Layout
 
-> **STATUS: COMPLETED.** The `WorkerAssignments` placeholder described below is
-> implemented and tested. The worker-assignment runtime logic now lives in
-> `CampNPCService` (extracted from `CombatService`). The architecture
-> decomposition (see `docs/planning/17_service_ownership_map.md`, section 7) is
-> also complete.
->
-> **Next recommended task:** documentation review pass over
-> `docs/05_current_state.md` and `docs/planning/17_service_ownership_map.md`,
-> then pick the next gameplay/MVP step from the master plan in
-> `docs/planning/16_assessment_and_master_plan.md`. Do not start a new large
-> gameplay system without a dedicated task spec.
->
-> The original Phase 2.3 spec is kept below for reference.
+> **STATUS: PLANNED (not implemented).** This is planning text only. Do not
+> implement it as part of the documentation pass. The previous task
+> (extract-only split of `WorldService` into `Services/World/` helper modules)
+> is complete, tested, and merged. See `docs/05_current_state.md`
+> ("Декомпозиция WorldService") and `docs/planning/17_service_ownership_map.md`
+> (section 8) for the helper-module ownership.
 
 ## Current context
 
-GoldenLand is a Roblox/Rojo single-player MVP.
+GoldenLand is a Roblox/Rojo single-player MVP. `WorldService.lua` is now a thin
+public world entry point, and world-building helpers live under
+`src/ServerScriptService/Services/World/`:
 
-Phase 2.1 is implemented and tested:
+* `WorldLayoutConfig.lua` — static layout constants/coordinates;
+* `WorldPartFactory.lua` — generic Part/Model/Folder helpers;
+* `WorldSignBuilder.lua` — signs/labels/boards;
+* `WorldZoneBuilder.lua` — ForestZone/RockZone visuals and forest visual states;
+* `WorldPathBuilder.lua` — blocked paths and pass objects.
 
-* after `BanditCamp_01` is captured, a rescued NPC appears;
-* the player can talk to the rescued NPC;
-* the NPC joins the player’s camp;
-* joined state is saved in `profile.JoinedNPCs`;
-* after Stop -> Play, the joined NPC restores correctly.
-
-Phase 2.2 is implemented and tested:
-
-* the joined NPC is represented as `CampWorker_BanditCamp_01`;
-* the worker has a visible name tag `Житель лагеря`;
-* the worker has a `CampWorkerStatusPrompt`;
-* talking to the worker currently only shows an informational message;
-* the worker restores after Stop -> Play;
-* no passive income exists yet;
-* no timed production exists yet;
-* no full worker automation exists yet;
-* no jobs/professions system exists yet.
+The current world still looks and behaves as before. The next step is the first
+readable island route skeleton, built **through these helper modules**.
 
 ## Goal
 
-Add the first minimal saved worker assignment state.
+Create a first readable island route skeleton that connects the existing world
+landmarks into a clear walkable layout. This is a **visual/layout** step, built
+with the new `World/` helper modules — not a gameplay systems step.
 
-The player should be able to talk to `CampWorker_BanditCamp_01` and assign a simple saved placeholder role to the worker.
+Planned route nodes (left-to-right / start-to-frontier reading order):
 
-This is still a foundation step before passive automation.
+* `SpawnBeach` — spawn / beach start area;
+* `StarterPath` — starter path leading inland;
+* `PlayerCampArea` — player camp / plot approach area;
+* `ForestGate` / forest access — entry toward the forest;
+* `ForestZone` — existing forest zone (reuse current builders);
+* `RockPass` / `RockZone` — existing pass and rock zone (reuse current builders);
+* `BanditCampPath` — path toward the hostile camp;
+* `BanditCamp_01` — existing hostile camp / captured outpost (do not move its
+  ownership out of `CombatService`).
 
-Do **not** implement passive income.
-Do **not** implement timed production.
-Do **not** implement full worker automation.
-Do **not** implement a job/profession system beyond this placeholder.
-Do **not** implement a UI menu unless absolutely necessary.
-Do **not** implement town systems, classes, backpack, food/fatigue, or advanced combat.
-
-## Files to inspect
-
-Before editing, inspect:
+## Files to inspect before editing
 
 * `docs/00_codex_context.md`
 * `docs/05_current_state.md`
 * `docs/06_development_rules.md`
-* `src/ServerScriptService/Services/CombatService.lua`
-* `src/ServerScriptService/Services/PlayerDataService.lua`
-* `src/ServerScriptService/ServerMain.server.lua`
+* `docs/planning/17_service_ownership_map.md`
+* `src/ServerScriptService/Services/WorldService.lua`
+* `src/ServerScriptService/Services/World/WorldLayoutConfig.lua`
+* `src/ServerScriptService/Services/World/WorldPartFactory.lua`
+* `src/ServerScriptService/Services/World/WorldSignBuilder.lua`
+* `src/ServerScriptService/Services/World/WorldZoneBuilder.lua`
+* `src/ServerScriptService/Services/World/WorldPathBuilder.lua`
 
-## Likely files to edit
+## Likely files to edit (when implemented)
 
-Expected edits are likely limited to:
+* `src/ServerScriptService/Services/World/WorldLayoutConfig.lua` — add route node
+  positions/names/sizes.
+* `src/ServerScriptService/Services/World/WorldPathBuilder.lua` — add a simple
+  trail/road builder for `StarterPath` and `BanditCampPath`.
+* `src/ServerScriptService/Services/World/WorldZoneBuilder.lua` — add
+  `SpawnBeach` / `PlayerCampArea` / `ForestGate` visual pieces if needed.
+* `src/ServerScriptService/Services/WorldService.lua` — only thin orchestration
+  calls into the builders (do not bloat it again).
 
-* `src/ServerScriptService/Services/PlayerDataService.lua`
-* `src/ServerScriptService/Services/CombatService.lua`
+## Implementation requirements (for the future task)
 
-Do not edit docs in this implementation task unless the task requires a tiny clarification.
+* Build the route nodes through the `World/` helper modules; keep
+  `WorldService.lua` as a thin coordinator.
+* Add new positions/names/sizes to `WorldLayoutConfig.lua` rather than hardcoding
+  them inline in builders.
+* Reuse the existing ForestZone, RockZone, `RockPass`, and `BlockedPathToForest`
+  builders — do not duplicate them.
+* Keep object names stable where save restoration or existing visuals depend on
+  them (`ForestZone`, `RockZone`, `RockPass`, `BlockedPathToForest`,
+  `BanditCamp_01`).
+* Add clear logs in the existing style if helpful.
+* Protect against duplicates on repeated world init (find-or-create pattern).
 
-## Implementation requirements
+## Important constraints
 
-### 1. Add saved worker assignment state
-
-Add a new saved profile field:
-
-```lua
-WorkerAssignments = {}
-```
-
-Use it to store worker assignment state by camp id.
-
-Example:
-
-```lua
-profile.WorkerAssignments["BanditCamp_01"] = "Idle"
-```
-
-Old saves must remain safe:
-
-* missing `WorkerAssignments` should load as an empty table;
-* no nil-index errors;
-* existing saves with `JoinedNPCs`, `CapturedCamps`, and `CampOutposts` must continue to work.
-
-Update `PlayerDataService.lua` consistently in all required profile places:
-
-* default profile;
-* loaded profile normalization;
-* save serialization;
-* public profile only if it matches existing diagnostic patterns and is useful.
-
-### 2. Update camp worker prompt behavior
-
-`CampWorker_BanditCamp_01` already exists from Phase 2.2 and has `CampWorkerStatusPrompt`.
-
-Update the worker prompt behavior:
-
-When the player talks to `CampWorker_BanditCamp_01`:
-
-#### If no assignment exists for `BanditCamp_01`
-
-Set:
-
-```lua
-profile.WorkerAssignments["BanditCamp_01"] = "Idle"
-```
-
-Then:
-
-* mark the profile dirty using the existing project pattern;
-* save/update profile using the existing project pattern if appropriate;
-* send message:
-
-```text
-Житель назначен в лагерь. Задания появятся позже.
-```
-
-#### If assignment already exists
-
-Do not duplicate state.
-
-Send message:
-
-```text
-Житель лагеря: текущее задание — ожидание.
-```
-
-### 3. No economy changes
-
-This task must not change resources.
-
-Talking to the worker must not:
-
-* add Gold;
-* add Wood;
-* add Stone;
-* add Metal;
-* add MetalIngot;
-* add MetalParts;
-* spend any resources;
-* start any production;
-* start timers;
-* create loops;
-* generate passive income.
-
-### 4. Restore behavior
-
-On Stop -> Play:
-
-* `WorkerAssignments` should persist;
-* `CampWorker_BanditCamp_01` should restore as before;
-* talking to the worker after restart should show the already-assigned message if assignment exists:
-
-```text
-Житель лагеря: текущее задание — ожидание.
-```
-
-### 5. Visual/status behavior
-
-Keep the worker visual simple:
-
-* worker remains visible as `Житель лагеря`;
-* no complex UI;
-* no job selection menu;
-* no production visuals;
-* optional: update internal attributes or comments if useful, but do not add large systems.
-
-### 6. Server-authoritative rules
-
-All state must remain server-authoritative:
-
-* the client only triggers `ProximityPrompt`;
-* the server validates the player profile;
-* the server writes `WorkerAssignments`;
-* the server sends player messages;
-* no client-provided state should be trusted.
-
-### 7. Duplication protection
-
-Ensure:
-
-* no duplicate workers;
-* no duplicate prompts;
-* repeated prompt use does not duplicate state;
-* repeated restore calls do not duplicate visuals;
-* repeated assignment attempts do not rewrite or multiply state unnecessarily.
-
-## Diagnostic logs
-
-Add clear logs similar to existing style:
-
-* `[CombatService] PlayerName assigned camp worker at BanditCamp_01 to Idle.`
-* `[CombatService] PlayerName checked camp worker assignment at BanditCamp_01: Idle.`
-
-Avoid noisy logs on every frame or repeated harmless restore.
-
-## Do not touch
-
-Do not change:
-
-* `default.project.json`
-* Rojo mapping
-* `src/Workspace`
-* R15/R6/avatar/player rig/avatar settings
-* unrelated services
-* forge logic
-* storage logic
-* workshop logic
-* house logic
-* resource gathering logic
-* combat balance
-* passive income
-* timed production
-* full worker automation
-* jobs/professions beyond this placeholder
-* town systems
-* classes
-* backpack
-* food/fatigue
-* advanced combat
+* Use the new `World/` helper modules.
+* Do **not** bloat `WorldService.lua` again.
+* Do **not** add combat changes.
+* Do **not** add new resources.
+* Do **not** change save data unless absolutely necessary.
+* Keep the task visual/layout-focused.
+* Preserve current gameplay behavior (quests, economy, combat, NPCs, plot).
+* Do not touch `default.project.json`, Rojo mapping, `src/Workspace`, or
+  R15/R6/avatar settings.
 
 ## Conflict marker check
 
@@ -244,9 +100,7 @@ Before finishing, verify there are no Git conflict markers:
 >>>>>>>
 ```
 
-## Expected final response
-
-At the end, provide:
+## Expected final response (for the future task)
 
 1. git status result from before changes;
 2. files changed;
@@ -257,43 +111,15 @@ At the end, provide:
 
 Do not create a PR unless explicitly asked.
 
-## Roblox Studio test checklist
+## Roblox Studio test checklist (for the future task)
 
-1. Start Play with a profile where `CampWorker_BanditCamp_01` exists.
-
-2. Record current resources:
-
-   * Gold
-   * Wood
-   * Stone
-   * Metal
-   * MetalIngot
-   * MetalParts
-
-3. Talk to the worker.
-
-4. Confirm message appears:
-
-   `Житель назначен в лагерь. Задания появятся позже.`
-
-5. Confirm resources did not change.
-
-6. Talk to the worker again.
-
-7. Confirm message appears:
-
-   `Житель лагеря: текущее задание — ожидание.`
-
-8. Confirm resources still did not change.
-
-9. Stop -> Play.
-
-10. Talk to the worker again.
-
-11. Confirm assignment persisted and the already-assigned message appears:
-
-`Житель лагеря: текущее задание — ожидание.`
-
-12. Confirm no duplicate workers or prompts.
-13. Confirm no passive resources are generated over time.
-14. Confirm no Output errors.
+1. Start Play with Rojo sync active.
+2. Confirm the start world is created and the spawn/beach area appears.
+3. Confirm the starter path and player camp area read as a connected route.
+4. Confirm ForestZone access (gate + blocked path) still behaves correctly when
+   locked and when unlocked.
+5. Confirm `RockPass` / `RockZone` behavior is unchanged.
+6. Confirm `BanditCamp_01` / captured outpost visuals are not broken.
+7. Confirm resource nodes and NPCs still appear and remain usable.
+8. Confirm no duplicate world objects after repeated world initialization.
+9. Confirm Output has no errors.
